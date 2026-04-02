@@ -1,15 +1,19 @@
+import os
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 
 from docx import Document
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from .ai_services import extract_text_from_image, generate_questions, grade_submission_with_ai
 from .database import Base, engine, get_db
 from .models import (
+    AuthToken,
     Correction,
     Course,
     Evaluation,
@@ -18,8 +22,11 @@ from .models import (
     Student,
     StudentEvaluation,
     Submission,
+    Teacher,
 )
+from .security import create_token, hash_password, hash_token, verify_password
 from .schemas import (
+    AuthResponse,
     CorrectionCreate,
     CorrectionRead,
     CourseCreate,
@@ -35,15 +42,99 @@ from .schemas import (
     StudentRead,
     SubmissionCreate,
     SubmissionRead,
+    TeacherLogin,
+    TeacherRead,
+    TeacherRegister,
 )
 
 app = FastAPI(
     title="Asisdoc API",
-    version="0.1.0",
-    description="MVP para asistencia docente con creación y corrección de evaluaciones.",
+    version="0.2.0",
+    description="Asistente docente con autenticacion, IA y OCR.",
 )
 
 Base.metadata.create_all(bind=engine)
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_current_teacher(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> Teacher:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token de acceso requerido")
+    token = authorization.split(" ", 1)[1].strip()
+    token_digest = hash_token(token)
+    record = (
+        db.query(AuthToken)
+        .filter(
+            AuthToken.token_hash == token_digest,
+            AuthToken.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    if record.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=401, detail="Token expirado")
+    teacher = db.get(Teacher, record.teacher_id)
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Docente no encontrado")
+    return teacher
+
+
+@app.post("/auth/register", response_model=TeacherRead)
+def register_teacher(payload: TeacherRegister, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    exists = db.query(Teacher).filter(Teacher.email == email).first()
+    if exists:
+        raise HTTPException(status_code=409, detail="El correo ya está registrado")
+    teacher = Teacher(
+        full_name=payload.full_name.strip(),
+        email=email,
+        password_hash=hash_password(payload.password),
+    )
+    db.add(teacher)
+    db.commit()
+    db.refresh(teacher)
+    return teacher
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login_teacher(payload: TeacherLogin, db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    teacher = db.query(Teacher).filter(Teacher.email == email).first()
+    if not teacher or not verify_password(payload.password, teacher.password_hash):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    plain_token, token_digest, expires_at = create_token()
+    token = AuthToken(
+        teacher_id=teacher.id,
+        token_hash=token_digest,
+        expires_at=expires_at,
+    )
+    db.add(token)
+    db.commit()
+    db.refresh(teacher)
+    return AuthResponse(access_token=plain_token, expires_at=expires_at, teacher=teacher)
+
+
+@app.post("/auth/logout")
+def logout_teacher(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token de acceso requerido")
+    token = authorization.split(" ", 1)[1].strip()
+    token_digest = hash_token(token)
+    record = db.query(AuthToken).filter(AuthToken.token_hash == token_digest).first()
+    if record and not record.revoked_at:
+        record.revoked_at = datetime.utcnow()
+        db.commit()
+    return {"ok": True}
 
 
 @app.get("/health")
@@ -52,7 +143,14 @@ def healthcheck():
 
 
 @app.post("/courses", response_model=CourseRead)
-def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
+def create_course(
+    payload: CourseCreate,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    exists = db.query(Course).filter(Course.name == payload.name).first()
+    if exists:
+        raise HTTPException(status_code=409, detail="El curso ya existe")
     course = Course(name=payload.name, description=payload.description)
     db.add(course)
     db.commit()
@@ -61,12 +159,19 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/courses", response_model=list[CourseRead])
-def list_courses(db: Session = Depends(get_db)):
+def list_courses(
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     return db.query(Course).order_by(Course.id.desc()).all()
 
 
 @app.post("/students", response_model=StudentRead)
-def create_student(payload: StudentCreate, db: Session = Depends(get_db)):
+def create_student(
+    payload: StudentCreate,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     course = db.get(Course, payload.course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -79,46 +184,23 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/students", response_model=list[StudentRead])
-def list_students(course_id: Optional[int] = None, db: Session = Depends(get_db)):
+def list_students(
+    course_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     query = db.query(Student)
     if course_id:
         query = query.filter(Student.course_id == course_id)
     return query.order_by(Student.id.desc()).all()
 
 
-def _mock_generate_questions(
-    topic: str,
-    evaluation_type: str,
-    difficulty: str,
-    count: int,
-) -> list[tuple[str, Optional[str]]]:
-    """Generador mock de preguntas. Reemplazable por LLM real."""
-    questions = []
-    for idx in range(1, count + 1):
-        if evaluation_type == "multiple_choice":
-            question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Selecciona la opción correcta."
-            )
-            answer = "Opción A"
-        elif evaluation_type == "true_false":
-            question = f"[{difficulty}] ({topic}) Pregunta {idx}: Verdadero o Falso."
-            answer = "Verdadero"
-        elif evaluation_type == "matching":
-            question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Relaciona cada concepto."
-            )
-            answer = None
-        else:
-            question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Responde según lo estudiado."
-            )
-            answer = None
-        questions.append((question, answer))
-    return questions
-
-
 @app.post("/evaluations", response_model=EvaluationRead)
-def create_evaluation(payload: EvaluationCreate, db: Session = Depends(get_db)):
+def create_evaluation(
+    payload: EvaluationCreate,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     course = db.get(Course, payload.course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -134,11 +216,12 @@ def create_evaluation(payload: EvaluationCreate, db: Session = Depends(get_db)):
     db.add(evaluation)
     db.flush()
 
-    generated_questions = _mock_generate_questions(
+    generated_questions = generate_questions(
         topic=payload.title,
         evaluation_type=payload.evaluation_type,
         difficulty=payload.difficulty,
         count=payload.question_count,
+        material_text=payload.material_text if payload.use_internal_knowledge else None,
     )
     for question, answer in generated_questions:
         db.add(
@@ -153,7 +236,11 @@ def create_evaluation(payload: EvaluationCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/evaluations", response_model=list[EvaluationRead])
-def list_evaluations(course_id: Optional[int] = None, db: Session = Depends(get_db)):
+def list_evaluations(
+    course_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     query = db.query(Evaluation)
     if course_id:
         query = query.filter(Evaluation.course_id == course_id)
@@ -165,6 +252,7 @@ def add_question(
     evaluation_id: int,
     payload: EvaluationQuestionCreate,
     db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
 ):
     evaluation = db.get(Evaluation, evaluation_id)
     if not evaluation:
@@ -182,7 +270,11 @@ def add_question(
 
 
 @app.post("/schedules", response_model=ExamScheduleRead)
-def create_schedule(payload: ExamScheduleCreate, db: Session = Depends(get_db)):
+def create_schedule(
+    payload: ExamScheduleCreate,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     evaluation = db.get(Evaluation, payload.evaluation_id)
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -198,12 +290,19 @@ def create_schedule(payload: ExamScheduleCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/schedules", response_model=list[ExamScheduleRead])
-def list_schedules(db: Session = Depends(get_db)):
+def list_schedules(
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     return db.query(ExamSchedule).order_by(ExamSchedule.scheduled_for.asc()).all()
 
 
 @app.post("/submissions", response_model=SubmissionRead)
-def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
+def create_submission(
+    payload: SubmissionCreate,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     student = db.get(Student, payload.student_id)
     evaluation = db.get(Evaluation, payload.evaluation_id)
     if not student or not evaluation:
@@ -223,25 +322,41 @@ def create_submission(payload: SubmissionCreate, db: Session = Depends(get_db)):
     return submission
 
 
-def _calculate_score(raw_text: str, criteria: str, max_score: float) -> tuple[float, str]:
-    """
-    Simula corrección por IA basada en texto y criterios.
-    Reemplazable por integración real con un modelo LLM/vision.
-    """
-    normalized = (raw_text or "").strip().lower()
-    keywords = [k.strip().lower() for k in criteria.split(",") if k.strip()]
-    if not keywords:
-        keywords = ["correcto"]
+@app.post("/submissions/photo", response_model=SubmissionRead)
+def create_submission_from_photo(
+    evaluation_id: int = Form(...),
+    student_id: int = Form(...),
+    image_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    student = db.get(Student, student_id)
+    evaluation = db.get(Evaluation, evaluation_id)
+    if not student or not evaluation:
+        raise HTTPException(
+            status_code=404, detail="Alumno o evaluación no encontrada"
+        )
 
-    matches = sum(1 for kw in keywords if kw in normalized)
-    ratio = matches / len(keywords)
-    score = round(max_score * ratio, 2)
-    feedback = (
-        f"Criterios evaluados: {', '.join(keywords)}. "
-        f"Coincidencias detectadas: {matches}/{len(keywords)}. "
-        f"Puntaje asignado: {score}/{max_score}."
+    extension = Path(image_file.filename or "submission.jpg").suffix.lower()
+    if extension not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}:
+        raise HTTPException(status_code=400, detail="Formato de imagen no soportado")
+
+    filename = f"sub_{student_id}_{evaluation_id}_{int(datetime.utcnow().timestamp())}{extension}"
+    file_path = UPLOAD_DIR / filename
+    with file_path.open("wb") as out:
+        out.write(image_file.file.read())
+
+    extracted_text = extract_text_from_image(file_path)
+    submission = Submission(
+        student_id=student_id,
+        evaluation_id=evaluation_id,
+        image_reference=str(file_path),
+        raw_text=extracted_text,
     )
-    return score, feedback
+    db.add(submission)
+    db.commit()
+    db.refresh(submission)
+    return submission
 
 
 @app.post("/submissions/{submission_id}/correct", response_model=CorrectionRead)
@@ -249,15 +364,17 @@ def correct_submission(
     submission_id: int,
     payload: CorrectionCreate,
     db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
 ):
     submission = db.get(Submission, submission_id)
     if not submission:
         raise HTTPException(status_code=404, detail="Entrega no encontrada")
 
-    score, feedback = _calculate_score(
+    score, feedback = grade_submission_with_ai(
         raw_text=submission.raw_text or "",
         criteria=payload.criteria,
         max_score=payload.max_score,
+        use_llm=payload.use_llm,
     )
 
     correction = Correction(
@@ -296,7 +413,11 @@ def correct_submission(
 
 
 @app.get("/students/{student_id}/grades", response_model=list[StudentEvaluationRead])
-def student_grades(student_id: int, db: Session = Depends(get_db)):
+def student_grades(
+    student_id: int,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     student = db.get(Student, student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
@@ -309,7 +430,11 @@ def student_grades(student_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/students/{student_id}/progress", response_model=ProgressStats)
-def student_progress(student_id: int, db: Session = Depends(get_db)):
+def student_progress(
+    student_id: int,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     student = db.get(Student, student_id)
     if not student:
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
@@ -356,6 +481,7 @@ def export_evaluation_docx(
     school_header: str = "Institución Educativa",
     teacher_name: str = "Docente",
     db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
 ):
     evaluation = db.get(Evaluation, evaluation_id)
     if not evaluation:
@@ -397,7 +523,11 @@ def export_evaluation_docx(
 
 
 @app.get("/stats/courses/{course_id}")
-def course_stats(course_id: int, db: Session = Depends(get_db)):
+def course_stats(
+    course_id: int,
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
     course = db.get(Course, course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")

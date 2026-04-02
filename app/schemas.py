@@ -4,6 +4,34 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class TeacherRegister(BaseModel):
+    full_name: str = Field(min_length=3)
+    email: str = Field(min_length=5)
+    password: str = Field(min_length=8)
+
+
+class TeacherLogin(BaseModel):
+    email: str
+    password: str
+
+
+class TeacherRead(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+    teacher: TeacherRead
+
+
 class CourseCreate(BaseModel):
     name: str = Field(min_length=2)
     description: Optional[str] = None
@@ -99,6 +127,11 @@ class SubmissionCreate(BaseModel):
     raw_text: Optional[str] = None
 
 
+class SubmissionPhotoCreate(BaseModel):
+    evaluation_id: int
+    student_id: int
+
+
 class SubmissionRead(BaseModel):
     id: int
     evaluation_id: int
@@ -116,6 +149,7 @@ class CorrectionCreate(BaseModel):
         description="Lista de palabras clave separadas por coma para la corrección."
     )
     max_score: float = Field(gt=0)
+    use_llm: bool = True
 
 
 class CorrectionRead(BaseModel):
