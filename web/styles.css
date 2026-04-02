@@ -144,6 +144,31 @@ button.link-btn {
   margin-top: 0.75rem;
 }
 
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+
+.quick-actions button {
+  width: auto;
+  margin-top: 0;
+}
+
+.list-inline-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.list-inline-actions button {
+  width: auto;
+  margin-top: 0;
+  padding: 0.45rem 0.7rem;
+}
+
 .link-inline {
   color: #1d4ed8;
   text-decoration: none;
@@ -162,6 +187,60 @@ button.link-btn {
 .list li {
   margin: 0.35rem 0;
   line-height: 1.35;
+}
+
+.demo-banner {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #f59e0b;
+  font-size: 0.9rem;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  z-index: 1200;
+  padding: 0.6rem;
+}
+
+.modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-height: 85vh;
+  border-radius: 14px;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid #d8e1ef;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.22);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-close {
+  width: auto;
+  padding: 0.45rem 0.7rem;
+  margin: 0;
+  background: #475569;
+}
+
+.modal-empty {
+  margin: 0.1rem 0 0;
+  color: #475569;
 }
 
 .hidden {
@@ -216,4 +295,15 @@ pre {
   padding: 0.75rem 0.85rem;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
   z-index: 1000;
+}
+
+@media (min-width: 860px) {
+  .modal-overlay {
+    align-items: center;
+  }
+
+  .modal-card {
+    width: min(680px, 94vw);
+    max-height: 80vh;
+  }
 }

@@ -53,6 +53,17 @@
             <button id="logout-btn" class="secondary">Cerrar sesión</button>
           </div>
         </div>
+        <div class="quick-actions">
+          <button type="button" class="secondary" data-open-modal="courses-modal">
+            Ver cursos
+          </button>
+          <button type="button" class="secondary" data-open-modal="students-modal">
+            Ver alumnos
+          </button>
+          <button type="button" class="secondary" data-open-modal="subjects-modal">
+            Ver materias
+          </button>
+        </div>
 
         <div class="grid two">
           <div class="subcard">
@@ -60,11 +71,13 @@
             <form id="course-form">
               <label>Nombre del curso</label>
               <input required id="course-name" placeholder="Ej: 3°A" />
-              <label>Descripción</label>
-              <input id="course-description" placeholder="Materia o detalle" />
+              <label>Materia / descripción</label>
+              <input id="course-description" placeholder="Ej: Ciencias Naturales" />
               <button type="submit">Crear curso</button>
             </form>
-            <ul id="courses-list" class="list"></ul>
+            <p class="inline-message info">
+              El listado completo de cursos se visualiza desde el botón "Ver cursos".
+            </p>
           </div>
 
           <div class="subcard">
@@ -76,7 +89,9 @@
               <select id="student-course" required></select>
               <button type="submit">Registrar alumno</button>
             </form>
-            <ul id="students-list" class="list"></ul>
+            <p class="inline-message info">
+              El listado completo de alumnos se visualiza desde el botón "Ver alumnos".
+            </p>
           </div>
         </div>
 
@@ -175,6 +190,36 @@
         </div>
       </section>
     </main>
+
+    <div id="courses-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Cursos</h3>
+          <button type="button" class="modal-close" data-close-modal="courses-modal">✕</button>
+        </div>
+        <ul id="courses-modal-list" class="list"></ul>
+      </div>
+    </div>
+
+    <div id="students-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Alumnos</h3>
+          <button type="button" class="modal-close" data-close-modal="students-modal">✕</button>
+        </div>
+        <ul id="students-modal-list" class="list"></ul>
+      </div>
+    </div>
+
+    <div id="subjects-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Materias</h3>
+          <button type="button" class="modal-close" data-close-modal="subjects-modal">✕</button>
+        </div>
+        <ul id="subjects-modal-list" class="list"></ul>
+      </div>
+    </div>
 
     <section id="toast" class="toast hidden"></section>
     <script src="/web/app.js?v=20260402a"></script>

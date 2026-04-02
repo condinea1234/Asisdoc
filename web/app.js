@@ -14,11 +14,16 @@ const el = {
   teacherLabel: document.getElementById("teacher-label"),
   authMessage: document.getElementById("auth-status"),
   toast: document.getElementById("toast"),
-  coursesList: document.getElementById("courses-list"),
-  studentsList: document.getElementById("students-list"),
+  demoBanner: document.getElementById("demo-banner"),
   evaluationsList: document.getElementById("evaluations-list"),
   schedulesList: document.getElementById("schedules-list"),
   resultsBox: document.getElementById("results-box"),
+  coursesModal: document.getElementById("courses-modal"),
+  studentsModal: document.getElementById("students-modal"),
+  subjectsModal: document.getElementById("subjects-modal"),
+  coursesModalList: document.getElementById("courses-modal-list"),
+  studentsModalList: document.getElementById("students-modal-list"),
+  subjectsModalList: document.getElementById("subjects-modal-list"),
 };
 
 const forms = {
@@ -41,20 +46,6 @@ const selects = {
   photoEvaluation: document.getElementById("photo-evaluation"),
   photoStudent: document.getElementById("photo-student"),
 };
-
-function persistSession() {
-  if (state.token) {
-    localStorage.setItem("asisdoc_token", state.token);
-  } else {
-    localStorage.removeItem("asisdoc_token");
-  }
-
-  if (state.teacher) {
-    localStorage.setItem("asisdoc_teacher", JSON.stringify(state.teacher));
-  } else {
-    localStorage.removeItem("asisdoc_teacher");
-  }
-}
 
 const DEMO_DATA = {
   teacher: { full_name: "Docente Demo", email: "demo@asisdoc.local" },
@@ -97,7 +88,19 @@ const DEMO_DATA = {
   ],
 };
 
+function persistSession() {
+  if (state.token) localStorage.setItem("asisdoc_token", state.token);
+  else localStorage.removeItem("asisdoc_token");
+
+  if (state.teacher) {
+    localStorage.setItem("asisdoc_teacher", JSON.stringify(state.teacher));
+  } else {
+    localStorage.removeItem("asisdoc_teacher");
+  }
+}
+
 function showToast(message, isError = false) {
+  if (!el.toast) return;
   el.toast.textContent = message;
   el.toast.classList.remove("hidden");
   el.toast.style.background = isError ? "#7f1d1d" : "#0f172a";
@@ -117,9 +120,7 @@ function setAuthMessage(message, isError = false) {
 
 function authHeaders(extra = {}) {
   const headers = { ...extra };
-  if (state.token) {
-    headers.Authorization = `Bearer ${state.token}`;
-  }
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
   return headers;
 }
 
@@ -137,16 +138,70 @@ async function apiJson(url, options = {}) {
   return data;
 }
 
+function closeAllModals() {
+  [el.coursesModal, el.studentsModal, el.subjectsModal]
+    .filter(Boolean)
+    .forEach((modal) => modal.classList.add("hidden"));
+}
+
+function openModalById(modalId) {
+  closeAllModals();
+  const modal = document.getElementById(modalId);
+  if (modal) modal.classList.remove("hidden");
+}
+
+function refreshModalLists() {
+  if (el.coursesModalList) {
+    el.coursesModalList.innerHTML = state.courses.length
+      ? state.courses
+          .map(
+            (course) =>
+              `<li><strong>${course.name}</strong>${
+                course.description ? ` - ${course.description}` : ""
+              }</li>`
+          )
+          .join("")
+      : "<li>No hay cursos cargados.</li>";
+  }
+
+  if (el.studentsModalList) {
+    el.studentsModalList.innerHTML = state.students.length
+      ? state.students
+          .map(
+            (student) =>
+              `<li><strong>${student.full_name}</strong> (curso ${student.course_id})</li>`
+          )
+          .join("")
+      : "<li>No hay alumnos cargados.</li>";
+  }
+
+  const subjects = Array.from(
+    new Set(
+      state.courses
+        .map((course) => (course.description || "").trim())
+        .filter((description) => description.length > 0)
+    )
+  );
+  if (el.subjectsModalList) {
+    el.subjectsModalList.innerHTML = subjects.length
+      ? subjects.map((subject) => `<li>${subject}</li>`).join("")
+      : "<li>No hay materias registradas aún.</li>";
+  }
+}
+
 function setLoggedInUI() {
   const loggedIn = Boolean(state.token && state.teacher);
-  el.authCard.classList.toggle("hidden", loggedIn);
-  el.panelCard.classList.toggle("hidden", !loggedIn);
-  el.teacherLabel.textContent = loggedIn
-    ? `${state.teacher.full_name} (${state.teacher.email})`
-    : "";
-  if (loggedIn) {
-    setAuthMessage("");
+  if (el.authCard) el.authCard.classList.toggle("hidden", loggedIn);
+  if (el.panelCard) el.panelCard.classList.toggle("hidden", !loggedIn);
+  if (el.teacherLabel) {
+    el.teacherLabel.textContent = loggedIn
+      ? `${state.teacher.full_name} (${state.teacher.email})`
+      : "";
   }
+  if (el.demoBanner) {
+    el.demoBanner.classList.toggle("hidden", !state.demoMode);
+  }
+  if (loggedIn) setAuthMessage("");
 }
 
 function clearAllState() {
@@ -157,10 +212,12 @@ function clearAllState() {
   state.evaluations = [];
   state.schedules = [];
   persistSession();
+  closeAllModals();
   setLoggedInUI();
 }
 
 function fillSelect(select, items, getText, emptyLabel) {
+  if (!select) return;
   const prev = select.value;
   select.innerHTML = `<option value="">${emptyLabel}</option>`;
   items.forEach((item) => {
@@ -175,93 +232,69 @@ function fillSelect(select, items, getText, emptyLabel) {
 }
 
 function renderLists() {
-  el.coursesList.innerHTML = state.courses.length
-    ? state.courses
-        .map(
-          (course) =>
-            `<li><strong>${course.name}</strong> ${
-              course.description ? `- ${course.description}` : ""
-            }</li>`
-        )
-        .join("")
-    : "<li>No hay cursos cargados.</li>";
+  if (el.evaluationsList) {
+    el.evaluationsList.innerHTML = state.evaluations.length
+      ? state.evaluations
+          .map(
+            (evaluation) =>
+              `<li>
+                <strong>${evaluation.title}</strong> (${evaluation.evaluation_type}, ${evaluation.difficulty})
+                <button class="link-btn" data-download-evaluation="${evaluation.id}" type="button">
+                  Descargar Word
+                </button>
+              </li>`
+          )
+          .join("")
+      : "<li>No hay evaluaciones cargadas.</li>";
+  }
 
-  el.studentsList.innerHTML = state.students.length
-    ? state.students
-        .map(
-          (student) =>
-            `<li><strong>${student.full_name}</strong> (curso ${student.course_id})</li>`
-        )
-        .join("")
-    : "<li>No hay alumnos cargados.</li>";
+  if (el.schedulesList) {
+    el.schedulesList.innerHTML = state.schedules.length
+      ? state.schedules
+          .map(
+            (schedule) =>
+              `<li>Evaluación ${schedule.evaluation_id} - ${new Date(
+                schedule.scheduled_for
+              ).toLocaleString("es-AR")} ${schedule.notes ? `(${schedule.notes})` : ""}</li>`
+          )
+          .join("")
+      : "<li>No hay exámenes agendados.</li>";
+  }
 
-  el.evaluationsList.innerHTML = state.evaluations.length
-    ? state.evaluations
-        .map(
-          (evaluation) =>
-            `<li>
-              <strong>${evaluation.title}</strong> (${evaluation.evaluation_type}, ${evaluation.difficulty})
-              <button class="link-btn" data-download-evaluation="${evaluation.id}" type="button">
-                Descargar Word
-              </button>
-            </li>`
-        )
-        .join("")
-    : "<li>No hay evaluaciones cargadas.</li>";
-
-  el.schedulesList.innerHTML = state.schedules.length
-    ? state.schedules
-        .map(
-          (schedule) =>
-            `<li>Evaluación ${schedule.evaluation_id} - ${new Date(
-              schedule.scheduled_for
-            ).toLocaleString("es-AR")} ${schedule.notes ? `(${schedule.notes})` : ""}</li>`
-        )
-        .join("")
-    : "<li>No hay exámenes agendados.</li>";
+  refreshModalLists();
 }
 
 function renderSelects() {
-  fillSelect(
-    selects.studentCourse,
-    state.courses,
-    (course) => `${course.id} - ${course.name}`,
-    "Seleccioná un curso"
-  );
-  fillSelect(
-    selects.evalCourse,
-    state.courses,
-    (course) => `${course.id} - ${course.name}`,
-    "Seleccioná un curso"
-  );
+  fillSelect(selects.studentCourse, state.courses, (c) => `${c.id} - ${c.name}`, "Seleccioná un curso");
+  fillSelect(selects.evalCourse, state.courses, (c) => `${c.id} - ${c.name}`, "Seleccioná un curso");
   fillSelect(
     selects.scheduleEvaluation,
     state.evaluations,
-    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    (e) => `${e.id} - ${e.title}`,
     "Seleccioná una evaluación"
   );
   fillSelect(
     selects.submissionEvaluation,
     state.evaluations,
-    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    (e) => `${e.id} - ${e.title}`,
     "Seleccioná una evaluación"
   );
   fillSelect(
     selects.photoEvaluation,
     state.evaluations,
-    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    (e) => `${e.id} - ${e.title}`,
     "Seleccioná una evaluación"
   );
   fillSelect(
     selects.submissionStudent,
     state.students,
-    (student) => `${student.id} - ${student.full_name}`,
+    (s) => `${s.id} - ${s.full_name}`,
     "Seleccioná un alumno"
   );
   fillSelect(
     selects.photoStudent,
     state.students,
-    (student) => `${student.id} - ${student.full_name}`,
+    (s) => `${s.id} - ${s.full_name}`,
     "Seleccioná un alumno"
   );
 }
@@ -307,17 +340,19 @@ function enableDemoMode() {
   persistSession();
   setLoggedInUI();
   loadData();
-  el.resultsBox.textContent = JSON.stringify(
-    {
-      modo: "demo",
-      mensaje:
-        "Estás viendo una vista previa visual. Los datos son de ejemplo y no se guardan en base real.",
-      sugerencia:
-        "Para pruebas reales, ingresá a la pantalla principal y usá registro/login normal.",
-    },
-    null,
-    2
-  );
+  if (el.resultsBox) {
+    el.resultsBox.textContent = JSON.stringify(
+      {
+        modo: "demo",
+        mensaje:
+          "Estás viendo una vista previa visual. Los datos son de ejemplo y no se guardan en base real.",
+        sugerencia:
+          "Para pruebas reales, ingresá a la pantalla principal y usá registro/login normal.",
+      },
+      null,
+      2
+    );
+  }
   showToast("Modo demo activo: visualización rápida en móvil.");
 }
 
@@ -600,9 +635,8 @@ forms.photoSubmission.addEventListener("submit", async (event) => {
   }
   try {
     const file = document.getElementById("photo-file").files[0];
-    if (!file) {
-      throw new Error("Seleccioná una imagen para corregir.");
-    }
+    if (!file) throw new Error("Seleccioná una imagen para corregir.");
+
     const formData = new FormData();
     formData.append("evaluation_id", document.getElementById("photo-evaluation").value);
     formData.append("student_id", document.getElementById("photo-student").value);
@@ -642,21 +676,48 @@ forms.photoSubmission.addEventListener("submit", async (event) => {
   }
 });
 
-el.evaluationsList.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  const evaluationId = target.dataset.downloadEvaluation;
-  if (!evaluationId) return;
-  if (state.demoMode) {
-    showToast("Modo demo: descarga simulada.");
-    return;
-  }
-  try {
-    await downloadEvaluationDocx(Number(evaluationId));
-    showToast("Documento Word descargado.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
+if (el.evaluationsList) {
+  el.evaluationsList.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const evaluationId = target.dataset.downloadEvaluation;
+    if (!evaluationId) return;
+    if (state.demoMode) {
+      showToast("Modo demo: descarga simulada.");
+      return;
+    }
+    try {
+      await downloadEvaluationDocx(Number(evaluationId));
+      showToast("Documento Word descargado.");
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+}
+
+document.querySelectorAll("[data-open-modal]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetModal = button.getAttribute("data-open-modal");
+    if (targetModal) openModalById(targetModal);
+  });
+});
+
+document.querySelectorAll("[data-close-modal]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetModal = button.getAttribute("data-close-modal");
+    if (targetModal) document.getElementById(targetModal)?.classList.add("hidden");
+  });
+});
+
+[el.coursesModal, el.studentsModal, el.subjectsModal].forEach((modal) => {
+  if (!modal) return;
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) modal.classList.add("hidden");
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeAllModals();
 });
 
 setLoggedInUI();
