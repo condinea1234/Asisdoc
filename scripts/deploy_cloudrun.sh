@@ -9,7 +9,7 @@ fi
 
 PROJECT_ID="$1"
 REGION="$2"
-SERVICE_NAME="${SERVICE_NAME:-asisdoc-api}"
+SERVICE_NAME="${SERVICE_NAME:-evalia-api}"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:latest"
 
 echo "Configurando proyecto gcloud: ${PROJECT_ID}"

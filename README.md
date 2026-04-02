@@ -182,7 +182,7 @@ Ejemplo:
 ```bash
 export GCP_PROJECT_ID="tu-proyecto"
 export GCP_REGION="us-central1"
-export CLOUD_RUN_SERVICE="asisdoc-api"
+export CLOUD_RUN_SERVICE="evalia-api"
 
 # Opcional IA:
 export AI_PROVIDER="gemini"
@@ -214,7 +214,7 @@ Actualizá en `firebase.json` la URL del backend Cloud Run:
 Luego:
 
 ```bash
-export FIREBASE_PROJECT_ID="tu-proyecto"
+export FIREBASE_PROJECT_ID="evalia-ia"
 ./scripts/deploy_firebase.sh
 ```
 

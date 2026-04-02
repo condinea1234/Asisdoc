@@ -11,7 +11,7 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "asisdoc-api",
+          "serviceId": "evalia-api",
           "region": "us-central1"
         }
       },

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 PROJECT_ID="${1:-}"
-BACKEND_URL="${2:-}"
+BACKEND_SERVICE_NAME="${2:-evalia-api}"
+BACKEND_REGION="${3:-us-central1}"
 
 if [[ -z "$PROJECT_ID" ]]; then
   echo "Uso: ./scripts/deploy_firebase.sh <PROJECT_ID> [BACKEND_URL]"
@@ -17,11 +18,12 @@ fi
 echo "Configurando proyecto Firebase: $PROJECT_ID"
 firebase use "$PROJECT_ID"
 
-if [[ -n "$BACKEND_URL" ]]; then
-  echo "Usando backend en: $BACKEND_URL"
+if [[ -n "$BACKEND_SERVICE_NAME" ]]; then
+  echo "Usando backend Cloud Run: ${BACKEND_SERVICE_NAME} (${BACKEND_REGION})"
   jq \
-    --arg backend "$BACKEND_URL" \
-    '.hosting.rewrites = [{"source":"/api/**","run":{"serviceId":"asisdoc-api","region":"us-central1"}}] | .hosting.headers += [{"source":"/config.js","headers":[{"key":"Cache-Control","value":"no-store"}]}]' \
+    --arg serviceId "$BACKEND_SERVICE_NAME" \
+    --arg region "$BACKEND_REGION" \
+    '.hosting.rewrites = [{"source":"/api/**","run":{"serviceId":$serviceId,"region":$region}},{"source":"**","destination":"/index.html"}]' \
     firebase.json >/tmp/firebase.json.tmp
   mv /tmp/firebase.json.tmp firebase.json
 fi
