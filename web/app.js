@@ -9,6 +9,14 @@ const state = {
   demoMode: false,
 };
 
+const API_BASE_URL = (window.__ASISDOC_API_BASE__ || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (!API_BASE_URL) return path;
+  return `${API_BASE_URL}${path}`;
+}
+
 const el = {
   authCard: document.getElementById("auth-card"),
   panelCard: document.getElementById("panel-card"),
@@ -127,7 +135,7 @@ function authHeaders(extra = {}) {
 }
 
 async function apiJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(apiUrl(url), options);
   let data = null;
   try {
     data = await response.json();
@@ -424,7 +432,9 @@ function enableDemoMode() {
 async function downloadEvaluationDocx(evaluationId) {
   const teacherName = encodeURIComponent(state.teacher?.full_name || "Docente");
   const response = await fetch(
-    `/evaluations/${evaluationId}/export-docx?school_header=Asisdoc&teacher_name=${teacherName}`,
+    apiUrl(
+      `/evaluations/${evaluationId}/export-docx?school_header=Asisdoc&teacher_name=${teacherName}`
+    ),
     { headers: authHeaders() }
   );
   if (!response.ok) {

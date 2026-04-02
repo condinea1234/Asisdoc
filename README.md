@@ -146,6 +146,86 @@ Rutas recomendadas para revisión visual:
 - `https://xxxxx.loca.lt/demo` (vista rápida mock, ideal para feedback de diseño)
 - `https://xxxxx.loca.lt/` (flujo real con login y datos persistidos)
 
+## Despliegue estable: Firebase + Cloud Run
+
+Para tener URL fija (sin depender de localtunnel), usá esta arquitectura:
+
+- **Backend FastAPI** en **Google Cloud Run**
+- **Frontend** (`web/`) en **Firebase Hosting**
+- Hosting redirige `"/api/**"` hacia Cloud Run
+
+### 1) Requisitos
+
+Instalar y autenticar:
+
+- `gcloud` CLI
+- `firebase-tools` (`npm i -g firebase-tools`)
+
+Login:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+firebase login
+```
+
+### 2) Desplegar backend en Cloud Run
+
+El repositorio ya incluye:
+
+- `Dockerfile`
+- `.dockerignore`
+- script `scripts/deploy_cloudrun.sh`
+
+Ejemplo:
+
+```bash
+export GCP_PROJECT_ID="tu-proyecto"
+export GCP_REGION="us-central1"
+export CLOUD_RUN_SERVICE="asisdoc-api"
+
+# Opcional IA:
+export AI_PROVIDER="gemini"
+export GEMINI_API_KEY="tu_api_key_gemini"
+export GEMINI_MODEL="gemini-1.5-flash"
+
+./scripts/deploy_cloudrun.sh
+```
+
+El script:
+
+- construye imagen con Cloud Build
+- despliega servicio Cloud Run
+- imprime URL pública del backend
+
+### 3) Configurar Firebase Hosting
+
+Ya están creados:
+
+- `firebase.json`
+- `.firebaserc`
+- script `scripts/deploy_firebase.sh`
+
+Actualizá en `firebase.json` la URL del backend Cloud Run:
+
+- `hosting.rewrites[0].run.serviceId`
+- `hosting.rewrites[0].run.region`
+
+Luego:
+
+```bash
+export FIREBASE_PROJECT_ID="tu-proyecto"
+./scripts/deploy_firebase.sh
+```
+
+### 4) Cómo queda el acceso
+
+- `https://<tu-site>.web.app/` -> panel web
+- `https://<tu-site>.web.app/demo` -> vista demo
+- `https://<tu-site>.web.app/api/docs` -> Swagger del backend (via rewrite)
+
+> Nota: en producción, el frontend llama a rutas `"/api/..."` automáticamente.
+
 ### Script recomendado para probar avances por fase
 
 Podés usar este script para no repetir pasos manuales:
