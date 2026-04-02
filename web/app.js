@@ -150,15 +150,51 @@ function openModalById(modalId) {
   if (modal) modal.classList.remove("hidden");
 }
 
+function selectCourseFromModal(courseId) {
+  const value = String(courseId);
+  [selects.studentCourse, selects.evalCourse].forEach((select) => {
+    if (!select) return;
+    if ([...select.options].some((opt) => opt.value === value)) {
+      select.value = value;
+    }
+  });
+  showToast("Curso seleccionado en formularios.");
+  closeAllModals();
+}
+
+function selectStudentFromModal(studentId) {
+  const value = String(studentId);
+  [selects.submissionStudent, selects.photoStudent].forEach((select) => {
+    if (!select) return;
+    if ([...select.options].some((opt) => opt.value === value)) {
+      select.value = value;
+    }
+  });
+  showToast("Alumno seleccionado para corrección.");
+  closeAllModals();
+}
+
+function selectSubjectFromModal(subject) {
+  const input = document.getElementById("course-description");
+  if (input) {
+    input.value = subject;
+  }
+  showToast("Materia seleccionada en formulario de curso.");
+  closeAllModals();
+}
+
 function refreshModalLists() {
   if (el.coursesModalList) {
     el.coursesModalList.innerHTML = state.courses.length
       ? state.courses
           .map(
             (course) =>
-              `<li><strong>${course.name}</strong>${
-                course.description ? ` - ${course.description}` : ""
-              }</li>`
+              `<li>
+                <strong>${course.name}</strong>${course.description ? ` - ${course.description}` : ""}
+                <button type="button" class="modal-select-btn" data-select-course="${course.id}">
+                  Seleccionar
+                </button>
+              </li>`
           )
           .join("")
       : "<li>No hay cursos cargados.</li>";
@@ -169,7 +205,12 @@ function refreshModalLists() {
       ? state.students
           .map(
             (student) =>
-              `<li><strong>${student.full_name}</strong> (curso ${student.course_id})</li>`
+              `<li>
+                <strong>${student.full_name}</strong> (curso ${student.course_id})
+                <button type="button" class="modal-select-btn" data-select-student="${student.id}">
+                  Seleccionar
+                </button>
+              </li>`
           )
           .join("")
       : "<li>No hay alumnos cargados.</li>";
@@ -184,7 +225,20 @@ function refreshModalLists() {
   );
   if (el.subjectsModalList) {
     el.subjectsModalList.innerHTML = subjects.length
-      ? subjects.map((subject) => `<li>${subject}</li>`).join("")
+      ? subjects
+          .map(
+            (subject) =>
+              `<li>
+                ${subject}
+                <button type="button" class="modal-select-btn" data-select-subject="${subject.replace(
+                  /"/g,
+                  "&quot;"
+                )}">
+                  Seleccionar
+                </button>
+              </li>`
+          )
+          .join("")
       : "<li>No hay materias registradas aún.</li>";
   }
 }
@@ -694,6 +748,28 @@ if (el.evaluationsList) {
     }
   });
 }
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const courseId = target.dataset.selectCourse;
+  if (courseId) {
+    selectCourseFromModal(Number(courseId));
+    return;
+  }
+
+  const studentId = target.dataset.selectStudent;
+  if (studentId) {
+    selectStudentFromModal(Number(studentId));
+    return;
+  }
+
+  const subject = target.dataset.selectSubject;
+  if (subject) {
+    selectSubjectFromModal(subject);
+  }
+});
 
 document.querySelectorAll("[data-open-modal]").forEach((button) => {
   button.addEventListener("click", () => {

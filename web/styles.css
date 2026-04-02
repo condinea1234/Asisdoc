@@ -156,6 +156,15 @@ button.link-btn {
   margin-top: 0;
 }
 
+.select-item-btn {
+  width: auto;
+  margin-top: 0;
+  margin-left: 0.45rem;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.78rem;
+  background: #2563eb;
+}
+
 .list-inline-actions {
   display: flex;
   gap: 0.5rem;
