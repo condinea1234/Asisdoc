@@ -110,10 +110,11 @@ def grade_submission_with_ai(
     raw_text: str,
     criteria: str,
     max_score: float,
+    use_llm: bool = True,
 ) -> tuple[float, str]:
     api_key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    if not api_key:
+    if not use_llm or not api_key:
         return _mock_grade(raw_text, criteria, max_score)
 
     client = OpenAI(api_key=api_key)
@@ -145,11 +146,28 @@ def grade_submission_with_ai(
 
 def extract_text_from_image(image_path: Path) -> str:
     """
-    OCR local con Tesseract. Si no esta disponible en el host, devuelve texto vacio.
+    OCR local con Tesseract.
+    Intenta idioma configurado, espanol e ingles para mejorar robustez.
+    Si Tesseract no esta disponible en el host, devuelve texto vacio.
     """
     try:
         image = Image.open(image_path)
-        text = pytesseract.image_to_string(image, lang=os.getenv("OCR_LANG", "spa"))
+        preferred_lang = os.getenv("OCR_LANG", "spa")
+        lang_candidates: list[str] = []
+        for lang in [preferred_lang, "spa", "eng"]:
+            if lang and lang not in lang_candidates:
+                lang_candidates.append(lang)
+
+        for lang in lang_candidates:
+            try:
+                text = pytesseract.image_to_string(image, lang=lang)
+            except Exception:
+                continue
+            cleaned = " ".join(text.split())
+            if cleaned:
+                return cleaned[:8000]
+
+        text = pytesseract.image_to_string(image)
         cleaned = " ".join(text.split())
         return cleaned[:8000]
     except Exception:
