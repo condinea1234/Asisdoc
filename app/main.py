@@ -149,7 +149,10 @@ def healthcheck():
 def serve_web():
     index_path = WEB_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(
+            index_path,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
     raise HTTPException(status_code=404, detail="Interfaz web no disponible")
 
 
@@ -157,7 +160,10 @@ def serve_web():
 def serve_web_demo():
     index_path = WEB_DIR / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(
+            index_path,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
     raise HTTPException(status_code=404, detail="Interfaz demo no disponible")
 
 

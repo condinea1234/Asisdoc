@@ -143,6 +143,32 @@ Rutas recomendadas para revisión visual:
 - `https://xxxxx.loca.lt/demo` (vista rápida mock, ideal para feedback de diseño)
 - `https://xxxxx.loca.lt/` (flujo real con login y datos persistidos)
 
+### Script recomendado para probar avances por fase
+
+Podés usar este script para no repetir pasos manuales:
+
+```bash
+./scripts/preview_movile.sh
+```
+
+Qué hace:
+
+- levanta `uvicorn` en `0.0.0.0:8001`
+- espera healthcheck
+- abre túnel temporal con `localtunnel`
+- muestra en consola:
+  - URL demo (`/demo`)
+  - URL real (`/`)
+- deja corriendo ambos procesos hasta que presiones `Ctrl+C`
+- al salir, limpia procesos automáticamente
+
+Opciones:
+
+```bash
+./scripts/preview_movile.sh --sin-tunel      # solo local, útil si usás misma red
+./scripts/preview_movile.sh --port 8010      # cambiar puerto
+```
+
 ### Cursos y alumnos (protegidos)
 
 - `POST /courses`
