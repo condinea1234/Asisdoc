@@ -107,6 +107,7 @@ El proyecto incluye una interfaz web inicial para docentes, 100% en español, se
 
 - `GET /` abre el panel web
 - archivos estáticos bajo `/web/*`
+- `GET /demo` abre una vista previa visual con datos simulados (sin login real)
 
 Flujos disponibles en el panel:
 
@@ -118,6 +119,29 @@ Flujos disponibles en el panel:
 - carga de respuestas en texto + corrección automática
 - carga de foto de examen + OCR + corrección
 - descarga de evaluación en `.docx`
+
+## Ver la interfaz desde Android (sin PC)
+
+Si estás usando Android y querés ver la evolución visual por fase:
+
+1. Levantá el backend:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
+
+2. Abrí un túnel temporal:
+
+```bash
+npx --yes localtunnel --port 8001
+```
+
+3. Tomá la URL pública que te entrega (ej. `https://xxxxx.loca.lt`) y abrila desde tu navegador móvil.
+
+Rutas recomendadas para revisión visual:
+
+- `https://xxxxx.loca.lt/demo` (vista rápida mock, ideal para feedback de diseño)
+- `https://xxxxx.loca.lt/` (flujo real con login y datos persistidos)
 
 ### Cursos y alumnos (protegidos)
 
