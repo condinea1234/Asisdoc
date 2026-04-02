@@ -153,6 +153,14 @@ def serve_web():
     raise HTTPException(status_code=404, detail="Interfaz web no disponible")
 
 
+@app.get("/demo")
+def serve_web_demo():
+    index_path = WEB_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Interfaz demo no disponible")
+
+
 @app.post("/courses", response_model=CourseRead)
 def create_course(
     payload: CourseCreate,

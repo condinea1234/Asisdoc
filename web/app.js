@@ -5,6 +5,7 @@ const state = {
   students: [],
   evaluations: [],
   schedules: [],
+  demoMode: false,
 };
 
 const el = {
@@ -53,6 +54,47 @@ function persistSession() {
     localStorage.removeItem("asisdoc_teacher");
   }
 }
+
+const DEMO_DATA = {
+  teacher: { full_name: "Docente Demo", email: "demo@asisdoc.local" },
+  courses: [
+    { id: 101, name: "3°A Ciencias", description: "Ciencias Naturales" },
+    { id: 102, name: "4°B Lengua", description: "Lengua y Literatura" },
+  ],
+  students: [
+    { id: 201, full_name: "Ana Pérez", course_id: 101 },
+    { id: 202, full_name: "Juan Gómez", course_id: 101 },
+    { id: 203, full_name: "Lucía Díaz", course_id: 102 },
+  ],
+  evaluations: [
+    {
+      id: 301,
+      title: "Evaluación de Células",
+      evaluation_type: "multiple_choice",
+      difficulty: "medium",
+    },
+    {
+      id: 302,
+      title: "Comprensión lectora",
+      evaluation_type: "open_answer",
+      difficulty: "hard",
+    },
+  ],
+  schedules: [
+    {
+      id: 401,
+      evaluation_id: 301,
+      scheduled_for: "2026-06-20T09:00:00",
+      notes: "Bloque de mañana",
+    },
+    {
+      id: 402,
+      evaluation_id: 302,
+      scheduled_for: "2026-06-25T11:00:00",
+      notes: "Aula 4B",
+    },
+  ],
+};
 
 function showToast(message, isError = false) {
   el.toast.textContent = message;
@@ -210,6 +252,15 @@ function renderSelects() {
 }
 
 async function loadData() {
+  if (state.demoMode) {
+    state.courses = DEMO_DATA.courses;
+    state.students = DEMO_DATA.students;
+    state.evaluations = DEMO_DATA.evaluations;
+    state.schedules = DEMO_DATA.schedules;
+    renderSelects();
+    renderLists();
+    return;
+  }
   if (!state.token) return;
   try {
     const [courses, students, evaluations, schedules] = await Promise.all([
@@ -232,6 +283,27 @@ async function loadData() {
       showToast(error.message, true);
     }
   }
+}
+
+function enableDemoMode() {
+  state.demoMode = true;
+  state.token = "demo-token";
+  state.teacher = DEMO_DATA.teacher;
+  persistSession();
+  setLoggedInUI();
+  loadData();
+  el.resultsBox.textContent = JSON.stringify(
+    {
+      modo: "demo",
+      mensaje:
+        "Estás viendo una vista previa visual. Los datos son de ejemplo y no se guardan en base real.",
+      sugerencia:
+        "Para pruebas reales, ingresá a la pantalla principal y usá registro/login normal.",
+    },
+    null,
+    2
+  );
+  showToast("Modo demo activo: visualización rápida en móvil.");
 }
 
 async function downloadEvaluationDocx(evaluationId) {
@@ -263,6 +335,10 @@ async function downloadEvaluationDocx(evaluationId) {
 
 forms.register.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("En modo demo no se puede registrar. Abrí / para modo real.", true);
+    return;
+  }
   try {
     await apiJson("/auth/register", {
       method: "POST",
@@ -282,6 +358,10 @@ forms.register.addEventListener("submit", async (event) => {
 
 forms.login.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("En modo demo no se inicia sesión real. Abrí / para modo real.", true);
+    return;
+  }
   try {
     const data = await apiJson("/auth/login", {
       method: "POST",
@@ -303,6 +383,10 @@ forms.login.addEventListener("submit", async (event) => {
 });
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
+  if (state.demoMode) {
+    window.location.href = "/";
+    return;
+  }
   try {
     await apiJson("/auth/logout", { method: "POST", headers: authHeaders() });
   } catch (error) {
@@ -315,6 +399,10 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 
 forms.course.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("Modo demo: acción simulada (no persiste).");
+    return;
+  }
   try {
     await apiJson("/courses", {
       method: "POST",
@@ -334,6 +422,10 @@ forms.course.addEventListener("submit", async (event) => {
 
 forms.student.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("Modo demo: acción simulada (no persiste).");
+    return;
+  }
   try {
     await apiJson("/students", {
       method: "POST",
@@ -353,6 +445,10 @@ forms.student.addEventListener("submit", async (event) => {
 
 forms.evaluation.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("Modo demo: acción simulada (no persiste).");
+    return;
+  }
   try {
     await apiJson("/evaluations", {
       method: "POST",
@@ -377,6 +473,10 @@ forms.evaluation.addEventListener("submit", async (event) => {
 
 forms.schedule.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    showToast("Modo demo: acción simulada (no persiste).");
+    return;
+  }
   try {
     const datetimeValue = document.getElementById("schedule-date").value;
     await apiJson("/schedules", {
@@ -398,6 +498,23 @@ forms.schedule.addEventListener("submit", async (event) => {
 
 forms.textSubmission.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    const maxScore = Number(document.getElementById("submission-max-score").value || 10);
+    el.resultsBox.textContent = JSON.stringify(
+      {
+        entrega_id: 9991,
+        texto_detectado: document.getElementById("submission-raw-text").value.trim(),
+        puntaje: Math.round(maxScore * 0.8 * 100) / 100,
+        puntaje_maximo: maxScore,
+        devolucion:
+          "Modo demo: corrección simulada. Se detecta buen manejo conceptual general.",
+      },
+      null,
+      2
+    );
+    showToast("Modo demo: corrección simulada.");
+    return;
+  }
   try {
     const submission = await apiJson("/submissions", {
       method: "POST",
@@ -439,6 +556,23 @@ forms.textSubmission.addEventListener("submit", async (event) => {
 
 forms.photoSubmission.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.demoMode) {
+    const maxScore = Number(document.getElementById("photo-max-score").value || 10);
+    el.resultsBox.textContent = JSON.stringify(
+      {
+        entrega_id: 9992,
+        texto_ocr: "Texto OCR simulado desde imagen en modo demo.",
+        puntaje: Math.round(maxScore * 0.7 * 100) / 100,
+        puntaje_maximo: maxScore,
+        devolucion:
+          "Modo demo: resultado de OCR/corrección simulado para vista previa visual.",
+      },
+      null,
+      2
+    );
+    showToast("Modo demo: carga y corrección simuladas.");
+    return;
+  }
   try {
     const file = document.getElementById("photo-file").files[0];
     if (!file) {
@@ -488,6 +622,10 @@ el.evaluationsList.addEventListener("click", async (event) => {
   if (!(target instanceof HTMLElement)) return;
   const evaluationId = target.dataset.downloadEvaluation;
   if (!evaluationId) return;
+  if (state.demoMode) {
+    showToast("Modo demo: descarga simulada.");
+    return;
+  }
   try {
     await downloadEvaluationDocx(Number(evaluationId));
     showToast("Documento Word descargado.");
@@ -497,6 +635,8 @@ el.evaluationsList.addEventListener("click", async (event) => {
 });
 
 setLoggedInUI();
-if (state.token && state.teacher) {
+if (window.location.pathname === "/demo") {
+  enableDemoMode();
+} else if (state.token && state.teacher) {
   loadData();
 }
