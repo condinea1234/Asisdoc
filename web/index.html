@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asisdoc - Panel Docente</title>
+    <link rel="stylesheet" href="/web/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Asisdoc</h1>
+      <p>Asistente docente con IA (en español)</p>
+    </header>
+
+    <main class="container">
+      <section id="auth-card" class="card">
+        <h2>Ingreso docente</h2>
+        <div class="grid two">
+          <div>
+            <h3>Registrarse</h3>
+            <form id="register-form">
+              <label>Nombre completo</label>
+              <input required id="reg-name" placeholder="Ej: María Gómez" />
+              <label>Correo</label>
+              <input required id="reg-email" type="email" />
+              <label>Contraseña</label>
+              <input required id="reg-password" type="password" minlength="8" />
+              <button type="submit">Crear cuenta</button>
+            </form>
+          </div>
+          <div>
+            <h3>Iniciar sesión</h3>
+            <form id="login-form">
+              <label>Correo</label>
+              <input required id="login-email" type="email" />
+              <label>Contraseña</label>
+              <input required id="login-password" type="password" />
+              <button type="submit">Entrar</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-card" class="card hidden">
+        <div class="panel-header">
+          <h2>Panel docente</h2>
+          <div>
+            <span id="teacher-label"></span>
+            <button id="logout-btn" class="secondary">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="subcard">
+            <h3>Curso</h3>
+            <form id="course-form">
+              <label>Nombre del curso</label>
+              <input required id="course-name" placeholder="Ej: 3°A" />
+              <label>Descripción</label>
+              <input id="course-description" placeholder="Materia o detalle" />
+              <button type="submit">Crear curso</button>
+            </form>
+            <ul id="courses-list" class="list"></ul>
+          </div>
+
+          <div class="subcard">
+            <h3>Alumno</h3>
+            <form id="student-form">
+              <label>Nombre del alumno</label>
+              <input required id="student-name" />
+              <label>Curso</label>
+              <select id="student-course" required></select>
+              <button type="submit">Registrar alumno</button>
+            </form>
+            <ul id="students-list" class="list"></ul>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="subcard">
+            <h3>Crear evaluación</h3>
+            <form id="evaluation-form">
+              <label>Título</label>
+              <input required id="eval-title" />
+              <label>Curso</label>
+              <select id="eval-course" required></select>
+              <label>Tipo</label>
+              <select id="eval-type">
+                <option value="multiple_choice">Opción múltiple</option>
+                <option value="true_false">Verdadero/Falso</option>
+                <option value="matching">Unir con líneas</option>
+                <option value="open_answer">Respuesta abierta</option>
+              </select>
+              <label>Dificultad</label>
+              <select id="eval-difficulty">
+                <option value="easy">Fácil</option>
+                <option value="medium" selected>Media</option>
+                <option value="hard">Difícil</option>
+              </select>
+              <label>Cantidad de preguntas</label>
+              <input id="eval-count" type="number" min="1" max="30" value="10" />
+              <label>Material base (opcional)</label>
+              <textarea id="eval-material" rows="3"></textarea>
+              <label class="inline-check">
+                <input id="eval-use-knowledge" type="checkbox" checked />
+                Permitir conocimiento general de IA
+              </label>
+              <button type="submit">Generar evaluación</button>
+            </form>
+            <ul id="evaluations-list" class="list"></ul>
+          </div>
+
+          <div class="subcard">
+            <h3>Agenda de examen</h3>
+            <form id="schedule-form">
+              <label>Evaluación</label>
+              <select id="schedule-evaluation" required></select>
+              <label>Fecha y hora</label>
+              <input id="schedule-date" type="datetime-local" required />
+              <label>Notas</label>
+              <input id="schedule-notes" />
+              <button type="submit">Programar</button>
+            </form>
+            <ul id="schedules-list" class="list"></ul>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="subcard">
+            <h3>Corrección por texto</h3>
+            <form id="submission-text-form">
+              <label>Evaluación</label>
+              <select id="submission-evaluation" required></select>
+              <label>Alumno</label>
+              <select id="submission-student" required></select>
+              <label>Respuesta del alumno</label>
+              <textarea id="submission-raw-text" rows="4"></textarea>
+              <label>Criterios (coma separada)</label>
+              <input id="submission-criteria" placeholder="células, tejidos, órganos" />
+              <label>Puntaje máximo</label>
+              <input id="submission-max-score" type="number" min="1" value="10" />
+              <label class="inline-check">
+                <input id="submission-use-llm" type="checkbox" checked />
+                Usar IA avanzada (si está configurada)
+              </label>
+              <button type="submit">Enviar y corregir</button>
+            </form>
+          </div>
+
+          <div class="subcard">
+            <h3>Corrección por foto (OCR)</h3>
+            <form id="submission-photo-form">
+              <label>Evaluación</label>
+              <select id="photo-evaluation" required></select>
+              <label>Alumno</label>
+              <select id="photo-student" required></select>
+              <label>Imagen del examen</label>
+              <input id="photo-file" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,.tiff" required />
+              <label>Criterios (coma separada)</label>
+              <input id="photo-criteria" placeholder="células, tejidos, órganos" />
+              <label>Puntaje máximo</label>
+              <input id="photo-max-score" type="number" min="1" value="10" />
+              <button type="submit">Subir foto y corregir</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="subcard">
+          <h3>Resultados de corrección</h3>
+          <pre id="results-box">Sin resultados aún.</pre>
+        </div>
+      </section>
+    </main>
+
+    <section id="toast" class="toast hidden"></section>
+    <script src="/web/app.js"></script>
+  </body>
+</html>

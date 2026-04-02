@@ -6,7 +6,8 @@ from typing import Optional
 
 from docx import Document
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -56,6 +57,8 @@ app = FastAPI(
 Base.metadata.create_all(bind=engine)
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 
 
 def get_current_teacher(
@@ -140,6 +143,14 @@ def logout_teacher(
 @app.get("/health")
 def healthcheck():
     return {"status": "ok"}
+
+
+@app.get("/")
+def serve_web():
+    index_path = WEB_DIR / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Interfaz web no disponible")
 
 
 @app.post("/courses", response_model=CourseRead)
