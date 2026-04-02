@@ -120,6 +120,25 @@
               <input id="eval-count" type="number" min="1" max="30" value="10" />
               <label>Material base (opcional)</label>
               <textarea id="eval-material" rows="3"></textarea>
+              <div class="material-box">
+                <label>Subir material (PDF, Word o imagen)</label>
+                <input
+                  id="material-file"
+                  type="file"
+                  accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,.bmp,.tiff"
+                />
+                <button type="button" id="material-upload-btn" class="secondary">
+                  Cargar material
+                </button>
+                <label>Material cargado para esta evaluación</label>
+                <select id="eval-material-select">
+                  <option value="">Sin material seleccionado</option>
+                </select>
+                <label class="inline-check">
+                  <input id="eval-only-material" type="checkbox" />
+                  Basar preguntas exclusivamente en material cargado
+                </label>
+              </div>
               <label class="inline-check">
                 <input id="eval-use-knowledge" type="checkbox" checked />
                 Permitir conocimiento general de IA

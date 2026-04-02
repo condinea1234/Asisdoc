@@ -10,6 +10,7 @@ from urllib import request as urlrequest
 import pytesseract
 from openai import OpenAI
 from PIL import Image
+from docx import Document
 
 
 def _mock_generate_questions(
@@ -165,6 +166,42 @@ def extract_text_from_image(image_path: Path) -> str:
         text = pytesseract.image_to_string(image)
         cleaned = " ".join(text.split())
         return cleaned[:8000]
+    except Exception:
+        return ""
+
+
+def extract_text_from_docx(docx_path: Path) -> str:
+    try:
+        document = Document(docx_path)
+        paragraphs = [p.text.strip() for p in document.paragraphs if p.text and p.text.strip()]
+        text = " ".join(paragraphs)
+        return " ".join(text.split())[:30000]
+    except Exception:
+        return ""
+
+
+def extract_text_from_pdf(pdf_path: Path) -> str:
+    """
+    Extrae texto de PDF sin dependencias extras:
+    intenta lectura textual básica y, si no hay contenido útil,
+    retorna vacío para fallback posterior.
+    """
+    try:
+        raw = pdf_path.read_bytes()
+        # Heurística simple para PDFs con texto embebido.
+        decoded = raw.decode("latin-1", errors="ignore")
+        candidates = re.findall(r"\(([^)]{2,})\)\s*Tj", decoded)
+        if not candidates:
+            candidates = re.findall(r"\[(.*?)\]\s*TJ", decoded, flags=re.S)
+            flattened = []
+            for block in candidates:
+                flattened.extend(re.findall(r"\(([^)]{2,})\)", block))
+            candidates = flattened
+        text = " ".join(candidates)
+        text = re.sub(r"\\[nrt]", " ", text)
+        text = re.sub(r"\\([()\\])", r"\1", text)
+        cleaned = " ".join(text.split())
+        return cleaned[:30000]
     except Exception:
         return ""
 

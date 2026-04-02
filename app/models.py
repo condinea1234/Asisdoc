@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -32,6 +33,7 @@ class Teacher(Base):
     )
 
     tokens: Mapped[list["AuthToken"]] = relationship(back_populates="teacher")
+    materials: Mapped[list["MaterialSource"]] = relationship(back_populates="teacher")
 
 
 class AuthToken(Base):
@@ -64,6 +66,25 @@ class Student(Base):
     grades: Mapped[list["StudentEvaluation"]] = relationship(back_populates="student")
 
 
+class MaterialSource(Base):
+    __tablename__ = "material_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    extension: Mapped[str] = mapped_column(String(16), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    teacher: Mapped["Teacher"] = relationship(back_populates="materials")
+    evaluations: Mapped[list["Evaluation"]] = relationship(
+        back_populates="material_source"
+    )
+
+
 class Evaluation(Base):
     __tablename__ = "evaluations"
 
@@ -73,12 +94,19 @@ class Evaluation(Base):
     evaluation_type: Mapped[str] = mapped_column(String(60), nullable=False)
     difficulty: Mapped[str] = mapped_column(String(40), nullable=False)
     material_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    material_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("material_sources.id"), nullable=True
+    )
+    strict_material_only: Mapped[bool] = mapped_column(default=False, nullable=False)
     use_internal_knowledge: Mapped[bool] = mapped_column(default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
 
     course: Mapped["Course"] = relationship(back_populates="evaluations")
+    material_source: Mapped[Optional["MaterialSource"]] = relationship(
+        back_populates="evaluations"
+    )
     questions: Mapped[list["EvaluationQuestion"]] = relationship(
         back_populates="evaluation", cascade="all, delete-orphan"
     )

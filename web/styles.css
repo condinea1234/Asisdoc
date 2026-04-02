@@ -156,7 +156,25 @@ button.link-btn {
   margin-top: 0;
 }
 
-.select-item-btn {
+.material-box {
+  margin: 0.6rem 0 0.8rem;
+  padding: 0.7rem;
+  border: 1px dashed #9fb3cf;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.material-box h4 {
+  margin: 0 0 0.45rem;
+}
+
+.material-meta {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: 0.35rem;
+}
+
+.modal-select-btn {
   width: auto;
   margin-top: 0;
   margin-left: 0.45rem;

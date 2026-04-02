@@ -1,4 +1,5 @@
 import os
+from contextlib import suppress
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -8,6 +9,7 @@ from docx import Document
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pypdf import PdfReader
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,7 @@ from .models import (
     Evaluation,
     EvaluationQuestion,
     ExamSchedule,
+    MaterialSource,
     Student,
     StudentEvaluation,
     Submission,
@@ -37,6 +40,7 @@ from .schemas import (
     EvaluationRead,
     ExamScheduleCreate,
     ExamScheduleRead,
+    MaterialSourceRead,
     ProgressStats,
     StudentCreate,
     StudentEvaluationRead,
@@ -48,6 +52,12 @@ from .schemas import (
     TeacherRegister,
 )
 
+
+def _teacher_or_401(teacher: Teacher | None) -> Teacher:
+    if not teacher:
+        raise HTTPException(status_code=401, detail="Docente no autenticado")
+    return teacher
+
 app = FastAPI(
     title="Asisdoc API",
     version="0.2.0",
@@ -57,6 +67,8 @@ app = FastAPI(
 Base.metadata.create_all(bind=engine)
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MATERIALS_DIR = Path(os.getenv("MATERIALS_DIR", "materials"))
+MATERIALS_DIR.mkdir(parents=True, exist_ok=True)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 
@@ -220,23 +232,122 @@ def list_students(
     return query.order_by(Student.id.desc()).all()
 
 
+def _extract_text_from_uploaded_material(file_path: Path, extension: str) -> str:
+    ext = extension.lower()
+    if ext == ".pdf":
+        with suppress(Exception):
+            reader = PdfReader(str(file_path))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n".join(pages).strip()
+            if text:
+                return text[:30000]
+    if ext == ".docx":
+        with suppress(Exception):
+            document = Document(str(file_path))
+            text = "\n".join(p.text for p in document.paragraphs).strip()
+            if text:
+                return text[:30000]
+    if ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}:
+        text = extract_text_from_image(file_path).strip()
+        if text:
+            return text[:30000]
+    return ""
+
+
+@app.post("/materials", response_model=MaterialSourceRead)
+def upload_material(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    teacher = _teacher_or_401(_)
+    allowed = {".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
+    extension = Path(file.filename or "").suffix.lower()
+    if extension not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato no soportado. Permitidos: PDF, DOCX, PNG, JPG, JPEG, WEBP, BMP, TIFF.",
+        )
+
+    timestamp = int(datetime.utcnow().timestamp() * 1000)
+    base_name = Path(file.filename or "material").stem.replace(" ", "_")
+    safe_name = "".join(ch for ch in base_name if ch.isalnum() or ch in {"_", "-"})
+    if not safe_name:
+        safe_name = "material"
+    filename = f"{safe_name}_{timestamp}{extension}"
+    saved_path = MATERIALS_DIR / filename
+
+    content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="El archivo está vacío.")
+    with saved_path.open("wb") as out:
+        out.write(content)
+
+    extracted_text = _extract_text_from_uploaded_material(saved_path, extension)
+    material = MaterialSource(
+        teacher_id=teacher.id,
+        original_filename=file.filename or filename,
+        extension=extension,
+        stored_path=str(saved_path),
+        extracted_text=extracted_text,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return material
+
+
+@app.get("/materials", response_model=list[MaterialSourceRead])
+def list_materials(
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    teacher = _teacher_or_401(_)
+    return (
+        db.query(MaterialSource)
+        .filter(MaterialSource.teacher_id == teacher.id)
+        .order_by(MaterialSource.id.desc())
+        .all()
+    )
+
+
 @app.post("/evaluations", response_model=EvaluationRead)
 def create_evaluation(
     payload: EvaluationCreate,
     db: Session = Depends(get_db),
     _: Teacher = Depends(get_current_teacher),
 ):
+    teacher = _teacher_or_401(_)
     course = db.get(Course, payload.course_id)
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
+
+    material_text = payload.material_text
+    if payload.material_source_id is not None:
+        material = db.get(MaterialSource, payload.material_source_id)
+        if not material or material.teacher_id != teacher.id:
+            raise HTTPException(status_code=404, detail="Material no encontrado")
+        material_text = material.extracted_text or material_text
+
+    if payload.strict_material_only and not (material_text or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="No hay texto de material para restringir la generación.",
+        )
+
+    use_internal_knowledge = (
+        payload.use_internal_knowledge and not payload.strict_material_only
+    )
 
     evaluation = Evaluation(
         title=payload.title,
         course_id=payload.course_id,
         evaluation_type=payload.evaluation_type,
         difficulty=payload.difficulty,
-        material_text=payload.material_text,
-        use_internal_knowledge=payload.use_internal_knowledge,
+        material_text=material_text,
+        material_source_id=payload.material_source_id,
+        strict_material_only=payload.strict_material_only,
+        use_internal_knowledge=use_internal_knowledge,
     )
     db.add(evaluation)
     db.flush()
@@ -246,7 +357,8 @@ def create_evaluation(
         evaluation_type=payload.evaluation_type,
         difficulty=payload.difficulty,
         count=payload.question_count,
-        material_text=payload.material_text if payload.use_internal_knowledge else None,
+        material_text=material_text,
+        restrict_to_material=payload.strict_material_only,
     )
     for question, answer in generated_questions:
         db.add(

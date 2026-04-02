@@ -72,6 +72,8 @@ class EvaluationCreate(BaseModel):
     question_count: int = Field(default=10, ge=1, le=100)
     material_text: Optional[str] = None
     use_internal_knowledge: bool = True
+    material_source_id: Optional[int] = None
+    strict_material_only: bool = False
 
 
 class EvaluationQuestionCreate(BaseModel):
@@ -96,6 +98,8 @@ class EvaluationRead(BaseModel):
     difficulty: str
     material_text: Optional[str]
     use_internal_knowledge: bool
+    material_source_id: Optional[int]
+    strict_material_only: bool
     created_at: datetime
     questions: list[EvaluationQuestionRead] = []
 
@@ -114,6 +118,18 @@ class ExamScheduleRead(BaseModel):
     evaluation_id: int
     scheduled_for: datetime
     notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialSourceRead(BaseModel):
+    id: int
+    original_filename: str
+    extension: str
+    stored_path: str
+    extracted_text: str
     created_at: datetime
 
     class Config:

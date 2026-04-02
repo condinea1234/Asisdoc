@@ -5,6 +5,7 @@ const state = {
   students: [],
   evaluations: [],
   schedules: [],
+  materials: [],
   demoMode: false,
 };
 
@@ -40,6 +41,7 @@ const forms = {
 const selects = {
   studentCourse: document.getElementById("student-course"),
   evalCourse: document.getElementById("eval-course"),
+  evalMaterial: document.getElementById("eval-material-select"),
   scheduleEvaluation: document.getElementById("schedule-evaluation"),
   submissionEvaluation: document.getElementById("submission-evaluation"),
   submissionStudent: document.getElementById("submission-student"),
@@ -322,6 +324,12 @@ function renderSelects() {
   fillSelect(selects.studentCourse, state.courses, (c) => `${c.id} - ${c.name}`, "Seleccioná un curso");
   fillSelect(selects.evalCourse, state.courses, (c) => `${c.id} - ${c.name}`, "Seleccioná un curso");
   fillSelect(
+    selects.evalMaterial,
+    state.materials,
+    (m) => `${m.id} - ${m.original_filename}`,
+    "Sin material seleccionado"
+  );
+  fillSelect(
     selects.scheduleEvaluation,
     state.evaluations,
     (e) => `${e.id} - ${e.title}`,
@@ -359,22 +367,25 @@ async function loadData() {
     state.students = DEMO_DATA.students;
     state.evaluations = DEMO_DATA.evaluations;
     state.schedules = DEMO_DATA.schedules;
+    state.materials = [];
     renderSelects();
     renderLists();
     return;
   }
   if (!state.token) return;
   try {
-    const [courses, students, evaluations, schedules] = await Promise.all([
+    const [courses, students, evaluations, schedules, materials] = await Promise.all([
       apiJson("/courses", { headers: authHeaders() }),
       apiJson("/students", { headers: authHeaders() }),
       apiJson("/evaluations", { headers: authHeaders() }),
       apiJson("/schedules", { headers: authHeaders() }),
+      apiJson("/materials", { headers: authHeaders() }),
     ]);
     state.courses = courses;
     state.students = students;
     state.evaluations = evaluations;
     state.schedules = schedules;
+    state.materials = materials;
     renderSelects();
     renderLists();
   } catch (error) {
@@ -574,6 +585,9 @@ forms.evaluation.addEventListener("submit", async (event) => {
         difficulty: document.getElementById("eval-difficulty").value,
         question_count: Number(document.getElementById("eval-count").value),
         material_text: document.getElementById("eval-material").value.trim() || null,
+        material_source_id:
+          Number(document.getElementById("eval-material-select").value) || null,
+        strict_material_only: document.getElementById("eval-only-material").checked,
         use_internal_knowledge: document.getElementById("eval-use-knowledge").checked,
       }),
     });
@@ -725,6 +739,29 @@ forms.photoSubmission.addEventListener("submit", async (event) => {
     );
     forms.photoSubmission.reset();
     showToast("Foto procesada y corregida.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+});
+
+document.getElementById("material-upload-btn")?.addEventListener("click", async () => {
+  if (state.demoMode) {
+    showToast("Modo demo: carga de material simulada.");
+    return;
+  }
+  try {
+    const file = document.getElementById("material-file")?.files?.[0];
+    if (!file) throw new Error("Seleccioná un archivo de material.");
+    const formData = new FormData();
+    formData.append("file", file);
+    await apiJson("/materials", {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    });
+    document.getElementById("material-file").value = "";
+    await loadData();
+    showToast("Material cargado correctamente.");
   } catch (error) {
     showToast(error.message, true);
   }
