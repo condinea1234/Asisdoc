@@ -1,544 +1,502 @@
-const estado = {
+const state = {
   token: localStorage.getItem("asisdoc_token") || "",
-  docente: JSON.parse(localStorage.getItem("asisdoc_docente") || "null"),
-  cursos: [],
-  alumnos: [],
-  evaluaciones: [],
-  entregas: [],
+  teacher: JSON.parse(localStorage.getItem("asisdoc_teacher") || "null"),
+  courses: [],
+  students: [],
+  evaluations: [],
+  schedules: [],
 };
 
-const ui = {
-  authSeccion: document.getElementById("auth-seccion"),
-  appSeccion: document.getElementById("app-seccion"),
-  authMensaje: document.getElementById("auth-mensaje"),
-  docenteNombre: document.getElementById("docente-nombre"),
-  docenteCorreo: document.getElementById("docente-correo"),
-  appMensaje: document.getElementById("app-mensaje"),
-  listaCursos: document.getElementById("lista-cursos"),
-  listaAlumnos: document.getElementById("lista-alumnos"),
-  listaEvaluaciones: document.getElementById("lista-evaluaciones"),
-  listaEntregas: document.getElementById("lista-entregas"),
-  listaNotas: document.getElementById("lista-notas"),
+const el = {
+  authCard: document.getElementById("auth-card"),
+  panelCard: document.getElementById("panel-card"),
+  teacherLabel: document.getElementById("teacher-label"),
+  toast: document.getElementById("toast"),
+  coursesList: document.getElementById("courses-list"),
+  studentsList: document.getElementById("students-list"),
+  evaluationsList: document.getElementById("evaluations-list"),
+  schedulesList: document.getElementById("schedules-list"),
+  resultsBox: document.getElementById("results-box"),
 };
 
-const formularios = {
-  login: document.getElementById("form-login"),
-  registro: document.getElementById("form-registro"),
-  curso: document.getElementById("form-curso"),
-  alumno: document.getElementById("form-alumno"),
-  evaluacion: document.getElementById("form-evaluacion"),
-  agenda: document.getElementById("form-agenda"),
-  entregaTexto: document.getElementById("form-entrega-texto"),
-  entregaFoto: document.getElementById("form-entrega-foto"),
-  correccion: document.getElementById("form-correccion"),
-  notas: document.getElementById("form-notas"),
+const forms = {
+  register: document.getElementById("register-form"),
+  login: document.getElementById("login-form"),
+  course: document.getElementById("course-form"),
+  student: document.getElementById("student-form"),
+  evaluation: document.getElementById("evaluation-form"),
+  schedule: document.getElementById("schedule-form"),
+  textSubmission: document.getElementById("submission-text-form"),
+  photoSubmission: document.getElementById("submission-photo-form"),
 };
 
-function limpiarMensajeAuth() {
-  ui.authMensaje.textContent = "";
-}
+const selects = {
+  studentCourse: document.getElementById("student-course"),
+  evalCourse: document.getElementById("eval-course"),
+  scheduleEvaluation: document.getElementById("schedule-evaluation"),
+  submissionEvaluation: document.getElementById("submission-evaluation"),
+  submissionStudent: document.getElementById("submission-student"),
+  photoEvaluation: document.getElementById("photo-evaluation"),
+  photoStudent: document.getElementById("photo-student"),
+};
 
-function mostrarMensajeAuth(msg, esError = false) {
-  ui.authMensaje.textContent = msg;
-  ui.authMensaje.className = esError ? "mensaje error" : "mensaje ok";
-}
-
-function mostrarMensajeApp(msg, esError = false) {
-  ui.appMensaje.textContent = msg;
-  ui.appMensaje.className = esError ? "mensaje error" : "mensaje ok";
-}
-
-function guardarSesion() {
-  if (estado.token) {
-    localStorage.setItem("asisdoc_token", estado.token);
+function persistSession() {
+  if (state.token) {
+    localStorage.setItem("asisdoc_token", state.token);
   } else {
     localStorage.removeItem("asisdoc_token");
   }
 
-  if (estado.docente) {
-    localStorage.setItem("asisdoc_docente", JSON.stringify(estado.docente));
+  if (state.teacher) {
+    localStorage.setItem("asisdoc_teacher", JSON.stringify(state.teacher));
   } else {
-    localStorage.removeItem("asisdoc_docente");
+    localStorage.removeItem("asisdoc_teacher");
   }
 }
 
-function construirHeaders(extra = {}) {
+function showToast(message, isError = false) {
+  el.toast.textContent = message;
+  el.toast.classList.remove("hidden");
+  el.toast.style.background = isError ? "#7f1d1d" : "#0f172a";
+  setTimeout(() => el.toast.classList.add("hidden"), 4200);
+}
+
+function authHeaders(extra = {}) {
   const headers = { ...extra };
-  if (estado.token) {
-    headers.Authorization = `Bearer ${estado.token}`;
+  if (state.token) {
+    headers.Authorization = `Bearer ${state.token}`;
   }
   return headers;
 }
 
-async function requestJSON(url, options = {}) {
+async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
   let data = null;
   try {
     data = await response.json();
-  } catch (err) {
+  } catch (error) {
     data = null;
   }
   if (!response.ok) {
-    const detail = data?.detail || "Error inesperado";
-    throw new Error(detail);
+    throw new Error(data?.detail || "Ocurrió un error en la solicitud.");
   }
   return data;
 }
 
-function renderizarVista() {
-  const logueado = Boolean(estado.token && estado.docente);
-  ui.authSeccion.classList.toggle("oculto", logueado);
-  ui.appSeccion.classList.toggle("oculto", !logueado);
-  if (logueado) {
-    ui.docenteNombre.textContent = estado.docente.full_name;
-    ui.docenteCorreo.textContent = estado.docente.email;
+function setLoggedInUI() {
+  const loggedIn = Boolean(state.token && state.teacher);
+  el.authCard.classList.toggle("hidden", loggedIn);
+  el.panelCard.classList.toggle("hidden", !loggedIn);
+  el.teacherLabel.textContent = loggedIn
+    ? `${state.teacher.full_name} (${state.teacher.email})`
+    : "";
+}
+
+function clearAllState() {
+  state.token = "";
+  state.teacher = null;
+  state.courses = [];
+  state.students = [];
+  state.evaluations = [];
+  state.schedules = [];
+  persistSession();
+  setLoggedInUI();
+}
+
+function fillSelect(select, items, getText, emptyLabel) {
+  const prev = select.value;
+  select.innerHTML = `<option value="">${emptyLabel}</option>`;
+  items.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = String(item.id);
+    option.textContent = getText(item);
+    select.appendChild(option);
+  });
+  if ([...select.options].some((opt) => opt.value === prev)) {
+    select.value = prev;
   }
 }
 
-function poblarSelects() {
-  const selectsCurso = [
-    "alumno-curso-id",
-    "evaluacion-curso-id",
-    "filtro-curso-evaluaciones",
-  ]
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
-
-  for (const select of selectsCurso) {
-    const valorActual = select.value;
-    select.innerHTML = `<option value="">Seleccionar curso</option>`;
-    for (const curso of estado.cursos) {
-      const option = document.createElement("option");
-      option.value = String(curso.id);
-      option.textContent = `${curso.id} - ${curso.name}`;
-      select.appendChild(option);
-    }
-    if ([...select.options].some((o) => o.value === valorActual)) {
-      select.value = valorActual;
-    }
-  }
-
-  const selectsAlumno = ["entrega-alumno-id", "entrega-foto-alumno-id", "notas-alumno-id"]
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
-  for (const select of selectsAlumno) {
-    const valorActual = select.value;
-    select.innerHTML = `<option value="">Seleccionar alumno</option>`;
-    for (const alumno of estado.alumnos) {
-      const option = document.createElement("option");
-      option.value = String(alumno.id);
-      option.textContent = `${alumno.id} - ${alumno.full_name}`;
-      select.appendChild(option);
-    }
-    if ([...select.options].some((o) => o.value === valorActual)) {
-      select.value = valorActual;
-    }
-  }
-
-  const selectsEvaluacion = [
-    "agenda-evaluacion-id",
-    "entrega-evaluacion-id",
-    "entrega-foto-evaluacion-id",
-  ]
-    .map((id) => document.getElementById(id))
-    .filter(Boolean);
-  for (const select of selectsEvaluacion) {
-    const valorActual = select.value;
-    select.innerHTML = `<option value="">Seleccionar evaluación</option>`;
-    for (const evaluacion of estado.evaluaciones) {
-      const option = document.createElement("option");
-      option.value = String(evaluacion.id);
-      option.textContent = `${evaluacion.id} - ${evaluacion.title}`;
-      select.appendChild(option);
-    }
-    if ([...select.options].some((o) => o.value === valorActual)) {
-      select.value = valorActual;
-    }
-  }
-
-  const selectEntrega = document.getElementById("correccion-entrega-id");
-  if (selectEntrega) {
-    const valorActual = selectEntrega.value;
-    selectEntrega.innerHTML = `<option value="">Seleccionar entrega</option>`;
-    for (const entrega of estado.entregas) {
-      const option = document.createElement("option");
-      option.value = String(entrega.id);
-      option.textContent = `${entrega.id} - Alumno ${entrega.student_id} / Eval ${entrega.evaluation_id}`;
-      selectEntrega.appendChild(option);
-    }
-    if ([...selectEntrega.options].some((o) => o.value === valorActual)) {
-      selectEntrega.value = valorActual;
-    }
-  }
-}
-
-function renderizarListas() {
-  ui.listaCursos.innerHTML = estado.cursos.length
-    ? estado.cursos
+function renderLists() {
+  el.coursesList.innerHTML = state.courses.length
+    ? state.courses
         .map(
-          (c) =>
-            `<li><strong>${c.name}</strong> <span class="muted">(${c.description || "sin descripción"})</span></li>`
+          (course) =>
+            `<li><strong>${course.name}</strong> ${
+              course.description ? `- ${course.description}` : ""
+            }</li>`
         )
         .join("")
     : "<li>No hay cursos cargados.</li>";
 
-  ui.listaAlumnos.innerHTML = estado.alumnos.length
-    ? estado.alumnos
+  el.studentsList.innerHTML = state.students.length
+    ? state.students
         .map(
-          (a) =>
-            `<li><strong>${a.full_name}</strong> <span class="muted">(curso ${a.course_id})</span></li>`
+          (student) =>
+            `<li><strong>${student.full_name}</strong> (curso ${student.course_id})</li>`
         )
         .join("")
     : "<li>No hay alumnos cargados.</li>";
 
-  ui.listaEvaluaciones.innerHTML = estado.evaluaciones.length
-    ? estado.evaluaciones
+  el.evaluationsList.innerHTML = state.evaluations.length
+    ? state.evaluations
         .map(
-          (e) =>
+          (evaluation) =>
             `<li>
-              <strong>${e.title}</strong>
-              <span class="muted">(tipo: ${e.evaluation_type}, dificultad: ${e.difficulty})</span>
-              <a class="boton secundario boton-link" href="/evaluations/${e.id}/export-docx?school_header=Escuela%20Demo&teacher_name=${encodeURIComponent(
-                estado.docente?.full_name || "Docente"
-              )}" target="_blank" rel="noreferrer">Descargar Word</a>
+              <strong>${evaluation.title}</strong> (${evaluation.evaluation_type}, ${evaluation.difficulty})
+              <button class="link-btn" data-download-evaluation="${evaluation.id}" type="button">
+                Descargar Word
+              </button>
             </li>`
         )
         .join("")
     : "<li>No hay evaluaciones cargadas.</li>";
 
-  ui.listaEntregas.innerHTML = estado.entregas.length
-    ? estado.entregas
+  el.schedulesList.innerHTML = state.schedules.length
+    ? state.schedules
         .map(
-          (s) =>
-            `<li>
-              <strong>Entrega ${s.id}</strong>
-              <span class="muted">(alumno ${s.student_id}, evaluación ${s.evaluation_id})</span>
-              <div class="muted">${(s.raw_text || "").slice(0, 140) || "sin texto extraído"}</div>
-            </li>`
+          (schedule) =>
+            `<li>Evaluación ${schedule.evaluation_id} - ${new Date(
+              schedule.scheduled_for
+            ).toLocaleString("es-AR")} ${schedule.notes ? `(${schedule.notes})` : ""}</li>`
         )
         .join("")
-    : "<li>No hay entregas cargadas.</li>";
+    : "<li>No hay exámenes agendados.</li>";
 }
 
-async function cargarCursos() {
-  estado.cursos = await requestJSON("/courses", {
-    headers: construirHeaders(),
-  });
+function renderSelects() {
+  fillSelect(
+    selects.studentCourse,
+    state.courses,
+    (course) => `${course.id} - ${course.name}`,
+    "Seleccioná un curso"
+  );
+  fillSelect(
+    selects.evalCourse,
+    state.courses,
+    (course) => `${course.id} - ${course.name}`,
+    "Seleccioná un curso"
+  );
+  fillSelect(
+    selects.scheduleEvaluation,
+    state.evaluations,
+    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    "Seleccioná una evaluación"
+  );
+  fillSelect(
+    selects.submissionEvaluation,
+    state.evaluations,
+    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    "Seleccioná una evaluación"
+  );
+  fillSelect(
+    selects.photoEvaluation,
+    state.evaluations,
+    (evaluation) => `${evaluation.id} - ${evaluation.title}`,
+    "Seleccioná una evaluación"
+  );
+  fillSelect(
+    selects.submissionStudent,
+    state.students,
+    (student) => `${student.id} - ${student.full_name}`,
+    "Seleccioná un alumno"
+  );
+  fillSelect(
+    selects.photoStudent,
+    state.students,
+    (student) => `${student.id} - ${student.full_name}`,
+    "Seleccioná un alumno"
+  );
 }
 
-async function cargarAlumnos() {
-  estado.alumnos = await requestJSON("/students", {
-    headers: construirHeaders(),
-  });
-}
-
-async function cargarEvaluaciones() {
-  estado.evaluaciones = await requestJSON("/evaluations", {
-    headers: construirHeaders(),
-  });
-}
-
-async function recargarTodo() {
-  if (!estado.token) return;
+async function loadData() {
+  if (!state.token) return;
   try {
-    await Promise.all([cargarCursos(), cargarAlumnos(), cargarEvaluaciones()]);
-    poblarSelects();
-    renderizarListas();
+    const [courses, students, evaluations, schedules] = await Promise.all([
+      apiJson("/courses", { headers: authHeaders() }),
+      apiJson("/students", { headers: authHeaders() }),
+      apiJson("/evaluations", { headers: authHeaders() }),
+      apiJson("/schedules", { headers: authHeaders() }),
+    ]);
+    state.courses = courses;
+    state.students = students;
+    state.evaluations = evaluations;
+    state.schedules = schedules;
+    renderSelects();
+    renderLists();
   } catch (error) {
-    if (String(error.message).includes("Token")) {
-      cerrarSesionLocal();
-      mostrarMensajeAuth("La sesión expiró. Iniciá sesión nuevamente.", true);
+    if (String(error.message).toLowerCase().includes("token")) {
+      clearAllState();
+      showToast("La sesión expiró. Ingresá nuevamente.", true);
     } else {
-      mostrarMensajeApp(error.message, true);
+      showToast(error.message, true);
     }
   }
 }
 
-function cerrarSesionLocal() {
-  estado.token = "";
-  estado.docente = null;
-  estado.cursos = [];
-  estado.alumnos = [];
-  estado.evaluaciones = [];
-  estado.entregas = [];
-  estado.notas = [];
-  guardarSesion();
-  renderizarVista();
+async function downloadEvaluationDocx(evaluationId) {
+  const teacherName = encodeURIComponent(state.teacher?.full_name || "Docente");
+  const response = await fetch(
+    `/evaluations/${evaluationId}/export-docx?school_header=Asisdoc&teacher_name=${teacherName}`,
+    { headers: authHeaders() }
+  );
+  if (!response.ok) {
+    let detail = "No se pudo descargar el documento.";
+    try {
+      const json = await response.json();
+      detail = json?.detail || detail;
+    } catch (error) {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `evaluacion_${evaluationId}.docx`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
-formularios.registro.addEventListener("submit", async (event) => {
+forms.register.addEventListener("submit", async (event) => {
   event.preventDefault();
-  limpiarMensajeAuth();
-  const payload = {
-    full_name: document.getElementById("registro-nombre").value.trim(),
-    email: document.getElementById("registro-email").value.trim(),
-    password: document.getElementById("registro-password").value,
-  };
   try {
-    await requestJSON("/auth/register", {
+    await apiJson("/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        full_name: document.getElementById("reg-name").value.trim(),
+        email: document.getElementById("reg-email").value.trim(),
+        password: document.getElementById("reg-password").value,
+      }),
     });
-    mostrarMensajeAuth("Registro exitoso. Ahora podés iniciar sesión.");
-    formularios.registro.reset();
+    forms.register.reset();
+    showToast("Cuenta creada. Ahora iniciá sesión.");
   } catch (error) {
-    mostrarMensajeAuth(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.login.addEventListener("submit", async (event) => {
+forms.login.addEventListener("submit", async (event) => {
   event.preventDefault();
-  limpiarMensajeAuth();
-  const payload = {
-    email: document.getElementById("login-email").value.trim(),
-    password: document.getElementById("login-password").value,
-  };
   try {
-    const data = await requestJSON("/auth/login", {
+    const data = await apiJson("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: document.getElementById("login-email").value.trim(),
+        password: document.getElementById("login-password").value,
+      }),
     });
-    estado.token = data.access_token;
-    estado.docente = data.teacher;
-    guardarSesion();
-    renderizarVista();
-    mostrarMensajeApp("Sesión iniciada correctamente.");
-    await recargarTodo();
+    state.token = data.access_token;
+    state.teacher = data.teacher;
+    persistSession();
+    setLoggedInUI();
+    await loadData();
+    showToast("Sesión iniciada correctamente.");
   } catch (error) {
-    mostrarMensajeAuth(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-document.getElementById("btn-logout").addEventListener("click", async () => {
+document.getElementById("logout-btn").addEventListener("click", async () => {
   try {
-    await requestJSON("/auth/logout", {
-      method: "POST",
-      headers: construirHeaders(),
-    });
+    await apiJson("/auth/logout", { method: "POST", headers: authHeaders() });
   } catch (error) {
-    // Ignorado: igualmente se cierra sesión local.
+    // no-op
   } finally {
-    cerrarSesionLocal();
-    mostrarMensajeAuth("Sesión cerrada.");
+    clearAllState();
+    showToast("Sesión cerrada.");
   }
 });
 
-formularios.curso.addEventListener("submit", async (event) => {
+forms.course.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = {
-    name: document.getElementById("curso-nombre").value.trim(),
-    description: document.getElementById("curso-descripcion").value.trim() || null,
-  };
   try {
-    await requestJSON("/courses", {
+    await apiJson("/courses", {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        name: document.getElementById("course-name").value.trim(),
+        description: document.getElementById("course-description").value.trim() || null,
+      }),
     });
-    mostrarMensajeApp("Curso creado.");
-    formularios.curso.reset();
-    await recargarTodo();
+    forms.course.reset();
+    await loadData();
+    showToast("Curso creado.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.alumno.addEventListener("submit", async (event) => {
+forms.student.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = {
-    full_name: document.getElementById("alumno-nombre").value.trim(),
-    course_id: Number(document.getElementById("alumno-curso-id").value),
-  };
   try {
-    await requestJSON("/students", {
+    await apiJson("/students", {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        full_name: document.getElementById("student-name").value.trim(),
+        course_id: Number(document.getElementById("student-course").value),
+      }),
     });
-    mostrarMensajeApp("Alumno registrado.");
-    formularios.alumno.reset();
-    await recargarTodo();
+    forms.student.reset();
+    await loadData();
+    showToast("Alumno registrado.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.evaluacion.addEventListener("submit", async (event) => {
+forms.evaluation.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = {
-    title: document.getElementById("evaluacion-titulo").value.trim(),
-    course_id: Number(document.getElementById("evaluacion-curso-id").value),
-    evaluation_type: document.getElementById("evaluacion-tipo").value,
-    difficulty: document.getElementById("evaluacion-dificultad").value,
-    question_count: Number(document.getElementById("evaluacion-cantidad").value),
-    material_text: document.getElementById("evaluacion-material").value.trim() || null,
-    use_internal_knowledge: document.getElementById("evaluacion-usar-ia").checked,
-  };
   try {
-    await requestJSON("/evaluations", {
+    await apiJson("/evaluations", {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        title: document.getElementById("eval-title").value.trim(),
+        course_id: Number(document.getElementById("eval-course").value),
+        evaluation_type: document.getElementById("eval-type").value,
+        difficulty: document.getElementById("eval-difficulty").value,
+        question_count: Number(document.getElementById("eval-count").value),
+        material_text: document.getElementById("eval-material").value.trim() || null,
+        use_internal_knowledge: document.getElementById("eval-use-knowledge").checked,
+      }),
     });
-    mostrarMensajeApp("Evaluación creada.");
-    formularios.evaluacion.reset();
-    await recargarTodo();
+    forms.evaluation.reset();
+    await loadData();
+    showToast("Evaluación generada.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.agenda.addEventListener("submit", async (event) => {
+forms.schedule.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const fecha = document.getElementById("agenda-fecha").value;
-  const hora = document.getElementById("agenda-hora").value || "08:00";
-  const payload = {
-    evaluation_id: Number(document.getElementById("agenda-evaluacion-id").value),
-    scheduled_for: `${fecha}T${hora}:00`,
-    notes: document.getElementById("agenda-notas").value.trim() || null,
-  };
   try {
-    await requestJSON("/schedules", {
+    const datetimeValue = document.getElementById("schedule-date").value;
+    await apiJson("/schedules", {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        evaluation_id: Number(document.getElementById("schedule-evaluation").value),
+        scheduled_for: new Date(datetimeValue).toISOString(),
+        notes: document.getElementById("schedule-notes").value.trim() || null,
+      }),
     });
-    mostrarMensajeApp("Examen programado en agenda.");
-    formularios.agenda.reset();
+    forms.schedule.reset();
+    await loadData();
+    showToast("Examen agendado.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.entregaTexto.addEventListener("submit", async (event) => {
+forms.textSubmission.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = {
-    evaluation_id: Number(document.getElementById("entrega-evaluacion-id").value),
-    student_id: Number(document.getElementById("entrega-alumno-id").value),
-    raw_text: document.getElementById("entrega-texto").value.trim() || "",
-    image_reference: null,
-  };
   try {
-    const entrega = await requestJSON("/submissions", {
+    const submission = await apiJson("/submissions", {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        evaluation_id: Number(document.getElementById("submission-evaluation").value),
+        student_id: Number(document.getElementById("submission-student").value),
+        raw_text: document.getElementById("submission-raw-text").value.trim(),
+      }),
     });
-    estado.entregas.unshift(entrega);
-    poblarSelects();
-    renderizarListas();
-    mostrarMensajeApp(`Entrega de texto creada (ID ${entrega.id}).`);
-    formularios.entregaTexto.reset();
+
+    const correction = await apiJson(`/submissions/${submission.id}/correct`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        criteria: document.getElementById("submission-criteria").value.trim(),
+        max_score: Number(document.getElementById("submission-max-score").value),
+        use_llm: document.getElementById("submission-use-llm").checked,
+      }),
+    });
+
+    el.resultsBox.textContent = JSON.stringify(
+      {
+        entrega_id: submission.id,
+        texto_detectado: submission.raw_text || "",
+        puntaje: correction.score,
+        puntaje_maximo: correction.max_score,
+        devolucion: correction.feedback,
+      },
+      null,
+      2
+    );
+    forms.textSubmission.reset();
+    showToast("Entrega corregida correctamente.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.entregaFoto.addEventListener("submit", async (event) => {
+forms.photoSubmission.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const formData = new FormData();
-  formData.append(
-    "evaluation_id",
-    document.getElementById("entrega-foto-evaluacion-id").value
-  );
-  formData.append("student_id", document.getElementById("entrega-foto-alumno-id").value);
-  const archivo = document.getElementById("entrega-foto-archivo").files[0];
-  if (!archivo) {
-    mostrarMensajeApp("Seleccioná una imagen del examen.", true);
-    return;
-  }
-  formData.append("image_file", archivo);
-
   try {
-    const entrega = await requestJSON("/submissions/photo", {
+    const file = document.getElementById("photo-file").files[0];
+    if (!file) {
+      throw new Error("Seleccioná una imagen para corregir.");
+    }
+    const formData = new FormData();
+    formData.append("evaluation_id", document.getElementById("photo-evaluation").value);
+    formData.append("student_id", document.getElementById("photo-student").value);
+    formData.append("image_file", file);
+
+    const submission = await apiJson("/submissions/photo", {
       method: "POST",
-      headers: construirHeaders(),
+      headers: authHeaders(),
       body: formData,
     });
-    estado.entregas.unshift(entrega);
-    poblarSelects();
-    renderizarListas();
-    mostrarMensajeApp(
-      `Entrega por foto creada (ID ${entrega.id}). Texto OCR: ${(entrega.raw_text || "vacío").slice(
-        0,
-        90
-      )}`
-    );
-    formularios.entregaFoto.reset();
-  } catch (error) {
-    mostrarMensajeApp(error.message, true);
-  }
-});
 
-formularios.correccion.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const entregaId = Number(document.getElementById("correccion-entrega-id").value);
-  const payload = {
-    criteria: document.getElementById("correccion-criterios").value.trim(),
-    max_score: Number(document.getElementById("correccion-puntaje-max").value),
-    use_llm: document.getElementById("correccion-usar-llm").checked,
-  };
-  try {
-    const data = await requestJSON(`/submissions/${entregaId}/correct`, {
+    const correction = await apiJson(`/submissions/${submission.id}/correct`, {
       method: "POST",
-      headers: construirHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        criteria: document.getElementById("photo-criteria").value.trim(),
+        max_score: Number(document.getElementById("photo-max-score").value),
+        use_llm: false,
+      }),
     });
-    mostrarMensajeApp(`Corrección lista. Puntaje: ${data.score}/${data.max_score}`);
-    formularios.correccion.reset();
+
+    el.resultsBox.textContent = JSON.stringify(
+      {
+        entrega_id: submission.id,
+        texto_ocr: submission.raw_text || "",
+        puntaje: correction.score,
+        puntaje_maximo: correction.max_score,
+        devolucion: correction.feedback,
+      },
+      null,
+      2
+    );
+    forms.photoSubmission.reset();
+    showToast("Foto procesada y corregida.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-formularios.notas.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const studentId = Number(document.getElementById("notas-alumno-id").value);
+el.evaluationsList.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const evaluationId = target.dataset.downloadEvaluation;
+  if (!evaluationId) return;
   try {
-    const [notas, progreso] = await Promise.all([
-      requestJSON(`/students/${studentId}/grades`, {
-        headers: construirHeaders(),
-      }),
-      requestJSON(`/students/${studentId}/progress`, {
-        headers: construirHeaders(),
-      }),
-    ]);
-    ui.listaNotas.innerHTML = `
-      <li><strong>Evaluaciones corregidas:</strong> ${progreso.evaluations_count}</li>
-      <li><strong>Promedio numérico:</strong> ${progreso.average_score}</li>
-      <li><strong>Promedio porcentual:</strong> ${progreso.average_percentage}%</li>
-      <li><strong>Último puntaje:</strong> ${progreso.last_score}</li>
-      <li><strong>Detalle:</strong></li>
-      ${notas
-        .map(
-          (n) =>
-            `<li class="muted">Eval ${n.evaluation_id}: ${n.score}/${n.max_score} - ${
-              n.feedback || "sin devolución"
-            }</li>`
-        )
-        .join("")}
-    `;
-    mostrarMensajeApp("Notas y progreso cargados.");
+    await downloadEvaluationDocx(Number(evaluationId));
+    showToast("Documento Word descargado.");
   } catch (error) {
-    mostrarMensajeApp(error.message, true);
+    showToast(error.message, true);
   }
 });
 
-document.getElementById("btn-recargar").addEventListener("click", async () => {
-  await recargarTodo();
-  mostrarMensajeApp("Datos actualizados.");
-});
-
-document.getElementById("btn-limpiar-mensaje").addEventListener("click", () => {
-  ui.appMensaje.textContent = "";
-  ui.appMensaje.className = "mensaje";
-});
-
-if (estado.token && estado.docente) {
-  renderizarVista();
-  recargarTodo();
-} else {
-  renderizarVista();
+setLoggedInUI();
+if (state.token && state.teacher) {
+  loadData();
 }

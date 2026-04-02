@@ -101,6 +101,24 @@ Authorization: Bearer <token>
 
 - `GET /health`
 
+## Interfaz web en español
+
+El proyecto incluye una interfaz web inicial para docentes, 100% en español, servida por el mismo backend:
+
+- `GET /` abre el panel web
+- archivos estáticos bajo `/web/*`
+
+Flujos disponibles en el panel:
+
+- registro e inicio de sesión docente
+- creación y listado de cursos
+- alta y listado de alumnos
+- creación de evaluaciones por tipo/dificultad
+- agenda de exámenes
+- carga de respuestas en texto + corrección automática
+- carga de foto de examen + OCR + corrección
+- descarga de evaluación en `.docx`
+
 ### Cursos y alumnos (protegidos)
 
 - `POST /courses`
