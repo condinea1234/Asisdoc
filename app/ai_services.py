@@ -3,6 +3,9 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 import pytesseract
 from openai import OpenAI
@@ -46,12 +49,6 @@ def generate_questions(
     count: int,
     material_text: Optional[str] = None,
 ) -> list[tuple[str, Optional[str]]]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    if not api_key:
-        return _mock_generate_questions(topic, evaluation_type, difficulty, count)
-
-    client = OpenAI(api_key=api_key)
     prompt = (
         "Eres un asistente pedagogico. Genera preguntas de evaluacion en JSON.\n"
         f"Tema: {topic}\n"
@@ -61,30 +58,31 @@ def generate_questions(
         f"Material opcional: {material_text or 'No provisto'}\n"
         "Responde un arreglo JSON con objetos {question_text, expected_answer}."
     )
-    try:
-        response = client.responses.create(
-            model=model,
-            input=prompt,
-            max_output_tokens=1400,
-        )
-        output_text = (response.output_text or "").strip()
-        parsed = _extract_json_array(output_text)
-        result: list[tuple[str, Optional[str]]] = []
-        for item in parsed[:count]:
-            result.append(
-                (
-                    str(item.get("question_text", "")).strip() or "Pregunta generica",
+
+    for provider in _provider_order():
+        try:
+            if provider == "gemini":
+                output_text = _generate_text_with_gemini(prompt, max_output_tokens=1400)
+            else:
+                output_text = _generate_text_with_openai(prompt, max_output_tokens=1400)
+
+            parsed = _extract_json_array((output_text or "").strip())
+            result: list[tuple[str, Optional[str]]] = []
+            for item in parsed[:count]:
+                result.append(
                     (
-                        str(item.get("expected_answer", "")).strip()
-                        if item.get("expected_answer") is not None
-                        else None
-                    ),
+                        str(item.get("question_text", "")).strip() or "Pregunta generica",
+                        (
+                            str(item.get("expected_answer", "")).strip()
+                            if item.get("expected_answer") is not None
+                            else None
+                        ),
+                    )
                 )
-            )
-        if result:
-            return result
-    except Exception:
-        pass
+            if result:
+                return result
+        except Exception:
+            continue
 
     return _mock_generate_questions(topic, evaluation_type, difficulty, count)
 
@@ -112,12 +110,8 @@ def grade_submission_with_ai(
     max_score: float,
     use_llm: bool = True,
 ) -> tuple[float, str]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    if not use_llm or not api_key:
+    if not use_llm:
         return _mock_grade(raw_text, criteria, max_score)
-
-    client = OpenAI(api_key=api_key)
     prompt = (
         "Corrige la respuesta de un alumno con criterios dados.\n"
         f"Criterios: {criteria}\n"
@@ -126,22 +120,23 @@ def grade_submission_with_ai(
         "Devuelve SOLO JSON con {score, feedback}. "
         "score debe estar entre 0 y puntaje maximo."
     )
-    try:
-        response = client.responses.create(
-            model=model,
-            input=prompt,
-            max_output_tokens=700,
-        )
-        output_text = (response.output_text or "").strip()
-        parsed = _extract_json_object(output_text)
-        score = float(parsed.get("score", 0.0))
-        score = max(0.0, min(max_score, score))
-        feedback = str(parsed.get("feedback", "")).strip()
-        if not feedback:
-            feedback = "Correccion realizada por IA."
-        return round(score, 2), feedback
-    except Exception:
-        return _mock_grade(raw_text, criteria, max_score)
+    for provider in _provider_order():
+        try:
+            if provider == "gemini":
+                output_text = _generate_text_with_gemini(prompt, max_output_tokens=700)
+            else:
+                output_text = _generate_text_with_openai(prompt, max_output_tokens=700)
+            parsed = _extract_json_object((output_text or "").strip())
+            score = float(parsed.get("score", 0.0))
+            score = max(0.0, min(max_score, score))
+            feedback = str(parsed.get("feedback", "")).strip()
+            if not feedback:
+                feedback = "Correccion realizada por IA."
+            return round(score, 2), feedback
+        except Exception:
+            continue
+
+    return _mock_grade(raw_text, criteria, max_score)
 
 
 def extract_text_from_image(image_path: Path) -> str:
@@ -192,3 +187,85 @@ def _extract_json_object(text: str) -> dict:
         if match:
             return json.loads(match.group(0))
         raise
+
+
+def _provider_order() -> list[str]:
+    """
+    Prioridad de proveedores:
+    - AI_PROVIDER=gemini -> solo Gemini
+    - AI_PROVIDER=openai -> solo OpenAI
+    - AI_PROVIDER=auto (default) -> Gemini y luego OpenAI si hay llaves.
+    """
+    configured = os.getenv("AI_PROVIDER", "auto").strip().lower()
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+
+    if configured == "gemini":
+        return ["gemini"] if has_gemini else []
+    if configured == "openai":
+        return ["openai"] if has_openai else []
+
+    order: list[str] = []
+    if has_gemini:
+        order.append("gemini")
+    if has_openai:
+        order.append("openai")
+    return order
+
+
+def _generate_text_with_openai(prompt: str, max_output_tokens: int) -> str:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY no configurada")
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    client = OpenAI(api_key=api_key)
+    response = client.responses.create(
+        model=model,
+        input=prompt,
+        max_output_tokens=max_output_tokens,
+    )
+    return (response.output_text or "").strip()
+
+
+def _generate_text_with_gemini(prompt: str, max_output_tokens: int) -> str:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY no configurada")
+    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{urlparse.quote(model, safe='')}:"  # model in path
+        f"generateContent?key={urlparse.quote(api_key, safe='')}"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": max_output_tokens,
+        },
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urlrequest.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=45) as response:
+            raw = response.read().decode("utf-8")
+    except urlerror.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
+
+    parsed = json.loads(raw)
+    texts: list[str] = []
+    for candidate in parsed.get("candidates", []):
+        parts = candidate.get("content", {}).get("parts", [])
+        for part in parts:
+            text = part.get("text")
+            if text:
+                texts.append(str(text))
+    if not texts:
+        raise RuntimeError("Gemini no devolvio texto util")
+    return "\n".join(texts).strip()

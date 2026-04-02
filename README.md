@@ -14,7 +14,7 @@ Backend de asistente docente con IA para:
 
 - **Backend:** FastAPI
 - **Base de datos:** SQLite + SQLAlchemy
-- **IA (opcional):** OpenAI API
+- **IA (opcional):** OpenAI API o Google Gemini API
 - **OCR:** Tesseract vía `pytesseract`
 - **Exportación Word:** `python-docx`
 
@@ -58,6 +58,9 @@ sudo apt-get install -y tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng
 ```bash
 export OPENAI_API_KEY="tu_api_key"
 export OPENAI_MODEL="gpt-4o-mini"
+export GEMINI_API_KEY="tu_api_key_gemini"
+export GEMINI_MODEL="gemini-1.5-flash"
+export AI_PROVIDER="gemini"   # gemini | openai (default: openai)
 export OCR_LANG="spa"        # spa, eng, etc.
 export UPLOAD_DIR="uploads"  # carpeta de imágenes
 ```
@@ -183,7 +186,9 @@ Opciones:
 - `POST /evaluations/{evaluation_id}/questions`
 - `GET /evaluations/{evaluation_id}/export-docx?school_header=...&teacher_name=...`
 
-> Si existe `OPENAI_API_KEY`, la generación usa LLM real. Si no, usa fallback local.
+> Si configurás `AI_PROVIDER=gemini` + `GEMINI_API_KEY`, la generación usa Gemini.
+> Si configurás `AI_PROVIDER=openai` + `OPENAI_API_KEY`, usa OpenAI.
+> Si no hay API key válida, usa fallback local.
 
 ### Agenda (protegidos)
 
@@ -199,6 +204,22 @@ Opciones:
 En corrección:
 - `use_llm=true` intenta corrección con LLM
 - si falla o falta API key, cae a fallback local por criterios
+
+## Probar Gemini gratis (rápido)
+
+Para pruebas iniciales podés usar la capa gratuita de Google AI Studio:
+
+1. Crear API key en Google AI Studio.
+2. Configurar variables:
+
+```bash
+export AI_PROVIDER="gemini"
+export GEMINI_API_KEY="tu_api_key_gemini"
+export GEMINI_MODEL="gemini-1.5-flash"
+```
+
+3. Levantar API y usar flujo normal (`/` o endpoints).  
+Si la key no está o falla, el sistema usa fallback local automáticamente.
 
 ### Historial y progreso (protegidos)
 
