@@ -12,6 +12,7 @@ const el = {
   authCard: document.getElementById("auth-card"),
   panelCard: document.getElementById("panel-card"),
   teacherLabel: document.getElementById("teacher-label"),
+  authMessage: document.getElementById("auth-status"),
   toast: document.getElementById("toast"),
   coursesList: document.getElementById("courses-list"),
   studentsList: document.getElementById("students-list"),
@@ -103,6 +104,17 @@ function showToast(message, isError = false) {
   setTimeout(() => el.toast.classList.add("hidden"), 4200);
 }
 
+function setAuthMessage(message, isError = false) {
+  if (!el.authMessage) return;
+  if (!message) {
+    el.authMessage.className = "auth-status hidden";
+    el.authMessage.textContent = "";
+    return;
+  }
+  el.authMessage.className = `auth-status ${isError ? "error" : "ok"}`;
+  el.authMessage.textContent = message;
+}
+
 function authHeaders(extra = {}) {
   const headers = { ...extra };
   if (state.token) {
@@ -132,6 +144,9 @@ function setLoggedInUI() {
   el.teacherLabel.textContent = loggedIn
     ? `${state.teacher.full_name} (${state.teacher.email})`
     : "";
+  if (loggedIn) {
+    setAuthMessage("");
+  }
 }
 
 function clearAllState() {
@@ -335,8 +350,11 @@ async function downloadEvaluationDocx(evaluationId) {
 
 forms.register.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setAuthMessage("");
   if (state.demoMode) {
-    showToast("En modo demo no se puede registrar. Abrí / para modo real.", true);
+    const msg = "En modo demo no se puede registrar. Abrí / para modo real.";
+    setAuthMessage(msg, true);
+    showToast(msg, true);
     return;
   }
   try {
@@ -350,16 +368,22 @@ forms.register.addEventListener("submit", async (event) => {
       }),
     });
     forms.register.reset();
-    showToast("Cuenta creada. Ahora iniciá sesión.");
+    const msg = "Cuenta creada. Ahora iniciá sesión.";
+    setAuthMessage(msg, false);
+    showToast(msg);
   } catch (error) {
+    setAuthMessage(error.message, true);
     showToast(error.message, true);
   }
 });
 
 forms.login.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setAuthMessage("");
   if (state.demoMode) {
-    showToast("En modo demo no se inicia sesión real. Abrí / para modo real.", true);
+    const msg = "En modo demo no se inicia sesión real. Abrí / para modo real.";
+    setAuthMessage(msg, true);
+    showToast(msg, true);
     return;
   }
   try {
@@ -378,6 +402,7 @@ forms.login.addEventListener("submit", async (event) => {
     await loadData();
     showToast("Sesión iniciada correctamente.");
   } catch (error) {
+    setAuthMessage(error.message, true);
     showToast(error.message, true);
   }
 });

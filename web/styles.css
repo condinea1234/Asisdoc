@@ -136,6 +136,24 @@ button.link-btn {
   margin: 0;
 }
 
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.link-inline {
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.link-inline:hover {
+  text-decoration: underline;
+}
+
 .list {
   margin: 0.2rem 0 0;
   padding-left: 1rem;
@@ -148,6 +166,33 @@ button.link-btn {
 
 .hidden {
   display: none;
+}
+
+.inline-message {
+  margin-top: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  border: 1px solid transparent;
+}
+
+.inline-message.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.inline-message.ok {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.inline-message.error {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
 }
 
 pre {
