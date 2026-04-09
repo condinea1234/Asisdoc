@@ -3,24 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Asisdoc - Panel Docente</title>
-    <link rel="stylesheet" href="/web/styles.css?v=20260402a" />
+    <title>Evalia - Panel Docente</title>
+    <link rel="stylesheet" href="/web/styles.css?v=20260410a" />
   </head>
   <body>
     <header class="topbar">
-      <h1>Asisdoc</h1>
-      <p>Asistente docente con IA (en español)</p>
+      <div class="topbar-inner">
+        <div>
+          <h1>Evalia</h1>
+          <p>Plataforma docente con IA para crear, corregir y acompañar evaluaciones.</p>
+        </div>
+        <span class="brand-badge">Modo profesional</span>
+      </div>
     </header>
     <div id="demo-banner" class="demo-banner hidden">
       Estás en modo demo visual. Los datos son de ejemplo y no se guardan.
     </div>
 
     <main class="container">
+      <section class="card intro-card">
+        <h2>Tu flujo docente, en un solo panel</h2>
+        <p>
+          Organizá cursos, creá evaluaciones didácticas, corregí con IA y seguí el progreso de tus
+          estudiantes de forma simple e intuitiva.
+        </p>
+        <div class="feature-chips">
+          <span>Creación guiada</span>
+          <span>Corrección asistida</span>
+          <span>Agenda académica</span>
+          <span>Materiales de apoyo</span>
+        </div>
+      </section>
+
       <section id="auth-card" class="card">
         <h2>Ingreso docente</h2>
+        <p class="section-help">Accedé con tu cuenta para administrar todo tu ciclo de evaluación.</p>
         <p id="auth-status" class="auth-status hidden"></p>
-        <div class="grid two">
-          <div>
+        <div class="grid two auth-grid">
+          <div class="auth-pane">
             <h3>Registrarse</h3>
             <form id="register-form">
               <label>Nombre completo</label>
@@ -32,7 +52,7 @@
               <button type="submit">Crear cuenta</button>
             </form>
           </div>
-          <div>
+          <div class="auth-pane">
             <h3>Iniciar sesión</h3>
             <form id="login-form">
               <label>Correo</label>
@@ -47,7 +67,10 @@
 
       <section id="panel-card" class="card hidden">
         <div class="panel-header">
-          <h2>Panel docente</h2>
+          <div>
+            <h2>Panel docente</h2>
+            <p class="section-help">Gestioná tu trabajo diario con una experiencia clara y ordenada.</p>
+          </div>
           <div>
             <span id="teacher-label"></span>
             <button id="logout-btn" class="secondary">Cerrar sesión</button>
@@ -68,6 +91,7 @@
         <div class="grid two">
           <div class="subcard">
             <h3>Curso</h3>
+            <p class="section-help">Creá el curso y asociá la materia principal.</p>
             <form id="course-form">
               <label>Nombre del curso</label>
               <input required id="course-name" placeholder="Ej: 3°A" />
@@ -82,6 +106,7 @@
 
           <div class="subcard">
             <h3>Alumno</h3>
+            <p class="section-help">Registrá estudiantes y vinculalos al curso correspondiente.</p>
             <form id="student-form">
               <label>Nombre del alumno</label>
               <input required id="student-name" />
@@ -98,6 +123,9 @@
         <div class="grid two">
           <div class="subcard">
             <h3>Crear evaluación</h3>
+            <p class="section-help">
+              Definí tipo, dificultad y tema de evaluación. Luego generá preguntas con IA.
+            </p>
             <form id="evaluation-form">
               <label>Título</label>
               <input required id="eval-title" />
@@ -106,6 +134,9 @@
                 id="eval-topic"
                 placeholder="Ej: Fracciones, Revolución Francesa, Células"
               />
+              <p class="field-hint">
+                Si no lo completás, se usará automáticamente el título como tema.
+              </p>
               <label>Curso</label>
               <select id="eval-course" required></select>
               <label>Tipo</label>
@@ -155,6 +186,7 @@
 
           <div class="subcard">
             <h3>Agenda de examen</h3>
+            <p class="section-help">Programá fechas y mantené visible tu calendario evaluativo.</p>
             <form id="schedule-form">
               <label>Evaluación</label>
               <select id="schedule-evaluation" required></select>
@@ -171,6 +203,7 @@
         <div class="grid two">
           <div class="subcard">
             <h3>Corrección por texto</h3>
+            <p class="section-help">Ideal para respuestas copiadas por el docente o por el alumno.</p>
             <form id="submission-text-form">
               <label>Evaluación</label>
               <select id="submission-evaluation" required></select>
@@ -192,6 +225,7 @@
 
           <div class="subcard">
             <h3>Corrección por foto (OCR)</h3>
+            <p class="section-help">Subí una imagen del examen y obtené corrección asistida.</p>
             <form id="submission-photo-form">
               <label>Evaluación</label>
               <select id="photo-evaluation" required></select>
@@ -210,7 +244,7 @@
 
         <div class="subcard">
           <h3>Resultados de corrección</h3>
-          <pre id="results-box">Sin resultados aún.</pre>
+          <pre id="results-box" class="results-console">Sin resultados aún.</pre>
         </div>
       </section>
     </main>
@@ -249,6 +283,6 @@
     </div>
 
     <section id="toast" class="toast hidden"></section>
-    <script src="/web/app.js?v=20260402a"></script>
+    <script src="/web/app.js?v=20260410a"></script>
   </body>
 </html>
