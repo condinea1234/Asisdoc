@@ -64,6 +64,20 @@ app = FastAPI(
     description="Asistente docente con autenticacion, IA y OCR.",
 )
 
+
+@app.middleware("http")
+async def strip_api_prefix(request, call_next):
+    """
+    Permite servir la API detr?s de Firebase Hosting con rewrite /api/**.
+    Si llega /api/*, se remapea internamente a /*.
+    """
+    path = request.scope.get("path", "")
+    if path == "/api":
+        request.scope["path"] = "/"
+    elif path.startswith("/api/"):
+        request.scope["path"] = path[4:]
+    return await call_next(request)
+
 Base.metadata.create_all(bind=engine)
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

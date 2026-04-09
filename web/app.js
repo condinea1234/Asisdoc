@@ -9,7 +9,7 @@ const state = {
   demoMode: false,
 };
 
-const API_BASE_URL = (window.__ASISDOC_API_BASE__ || "").replace(/\/$/, "");
+const API_BASE_URL = (window.__ASISDOC_API_BASE__ || "/api").replace(/\/$/, "");
 
 function apiUrl(path) {
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
