@@ -4,14 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Evalia - Panel Docente</title>
-    <link rel="stylesheet" href="/web/styles.css?v=20260410a" />
+    <link rel="stylesheet" href="/web/styles.css?v=20260410c" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
-        <div>
-          <h1>Evalia</h1>
-          <p>Plataforma docente con IA para crear, corregir y acompañar evaluaciones.</p>
+        <div class="brand">
+            <img class="brand-logo" src="/web/logo-evalia.svg" alt="Logo Evalia" />
+          <div>
+            <h1>Evalia</h1>
+            <p>Plataforma docente con IA para crear, corregir y acompañar evaluaciones.</p>
+          </div>
         </div>
         <span class="brand-badge">Modo profesional</span>
       </div>
@@ -21,48 +24,52 @@
     </div>
 
     <main class="container">
-      <section class="card intro-card">
-        <h2>Tu flujo docente, en un solo panel</h2>
-        <p>
-          Organizá cursos, creá evaluaciones didácticas, corregí con IA y seguí el progreso de tus
-          estudiantes de forma simple e intuitiva.
-        </p>
-        <div class="feature-chips">
-          <span>Creación guiada</span>
-          <span>Corrección asistida</span>
-          <span>Agenda académica</span>
-          <span>Materiales de apoyo</span>
-        </div>
-      </section>
+      <section id="auth-shell" class="auth-shell">
+        <aside class="auth-hero card">
+          <div class="auth-hero-logo">
+            <img class="brand-logo large" src="/web/logo-evalia.svg" alt="Logo Evalia" />
+            <div>
+              <h2>Bienvenido a Evalia</h2>
+              <p>Diseñado para docentes: sobrio, claro y enfocado en tareas reales del aula.</p>
+            </div>
+          </div>
+          <ul class="benefits-list">
+            <li>Creación de evaluaciones con baja carga cognitiva</li>
+            <li>Corrección asistida con IA y criterios del docente</li>
+            <li>Navegación simple con acceso rápido a cursos y alumnos</li>
+            <li>Interfaz accesible con foco en legibilidad y orden</li>
+          </ul>
+        </aside>
 
-      <section id="auth-card" class="card">
-        <h2>Ingreso docente</h2>
-        <p class="section-help">Accedé con tu cuenta para administrar todo tu ciclo de evaluación.</p>
-        <p id="auth-status" class="auth-status hidden"></p>
-        <div class="grid two auth-grid">
-          <div class="auth-pane">
-            <h3>Registrarse</h3>
-            <form id="register-form">
-              <label>Nombre completo</label>
-              <input required id="reg-name" placeholder="Ej: María Gómez" />
-              <label>Correo</label>
-              <input required id="reg-email" type="email" />
-              <label>Contraseña</label>
-              <input required id="reg-password" type="password" minlength="8" />
-              <button type="submit">Crear cuenta</button>
-            </form>
+        <section id="auth-card" class="card auth-card">
+          <h2>Ingreso docente</h2>
+          <p class="section-help">Accedé con tu cuenta para administrar todo tu ciclo de evaluación.</p>
+          <p id="auth-status" class="auth-status hidden"></p>
+          <div class="grid two auth-grid">
+            <div class="auth-pane">
+              <h3>Registrarse</h3>
+              <form id="register-form">
+                <label>Nombre completo</label>
+                <input required id="reg-name" placeholder="Ej: María Gómez" />
+                <label>Correo</label>
+                <input required id="reg-email" type="email" />
+                <label>Contraseña</label>
+                <input required id="reg-password" type="password" minlength="8" />
+                <button type="submit">Crear cuenta</button>
+              </form>
+            </div>
+            <div class="auth-pane">
+              <h3>Iniciar sesión</h3>
+              <form id="login-form">
+                <label>Correo</label>
+                <input required id="login-email" type="email" />
+                <label>Contraseña</label>
+                <input required id="login-password" type="password" />
+                <button type="submit">Entrar</button>
+              </form>
+            </div>
           </div>
-          <div class="auth-pane">
-            <h3>Iniciar sesión</h3>
-            <form id="login-form">
-              <label>Correo</label>
-              <input required id="login-email" type="email" />
-              <label>Contraseña</label>
-              <input required id="login-password" type="password" />
-              <button type="submit">Entrar</button>
-            </form>
-          </div>
-        </div>
+        </section>
       </section>
 
       <section id="panel-card" class="card hidden">
@@ -283,6 +290,6 @@
     </div>
 
     <section id="toast" class="toast hidden"></section>
-    <script src="/web/app.js?v=20260410a"></script>
+    <script src="/web/app.js?v=20260410c"></script>
   </body>
 </html>
