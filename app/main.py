@@ -366,8 +366,10 @@ def create_evaluation(
     db.add(evaluation)
     db.flush()
 
+    effective_topic = (payload.topic or "").strip() or payload.title
+
     generated_questions = generate_questions(
-        topic=payload.title,
+        topic=effective_topic,
         evaluation_type=payload.evaluation_type,
         difficulty=payload.difficulty,
         count=payload.question_count,

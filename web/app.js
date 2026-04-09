@@ -590,6 +590,7 @@ forms.evaluation.addEventListener("submit", async (event) => {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         title: document.getElementById("eval-title").value.trim(),
+        topic: document.getElementById("eval-topic").value.trim() || null,
         course_id: Number(document.getElementById("eval-course").value),
         evaluation_type: document.getElementById("eval-type").value,
         difficulty: document.getElementById("eval-difficulty").value,

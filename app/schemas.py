@@ -64,6 +64,7 @@ class StudentRead(BaseModel):
 
 class EvaluationCreate(BaseModel):
     title: str = Field(min_length=3)
+    topic: Optional[str] = None
     course_id: int
     evaluation_type: str = Field(
         description="Ej: multiple_choice, true_false, matching, open_answer"

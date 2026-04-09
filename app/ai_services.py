@@ -49,14 +49,24 @@ def generate_questions(
     difficulty: str,
     count: int,
     material_text: Optional[str] = None,
+    restrict_to_material: bool = False,
 ) -> list[tuple[str, Optional[str]]]:
+    topic_value = (topic or "").strip() or "Tema general"
+    material_value = (material_text or "").strip()
+    material_label = material_value if material_value else "No provisto"
+    source_instruction = (
+        "Debes basarte exclusivamente en el material provisto."
+        if restrict_to_material
+        else "Puedes usar el material provisto y, si falta contexto, conocimiento pedagógico general."
+    )
     prompt = (
         "Eres un asistente pedagogico. Genera preguntas de evaluacion en JSON.\n"
-        f"Tema: {topic}\n"
+        f"Tema: {topic_value}\n"
         f"Tipo: {evaluation_type}\n"
         f"Dificultad: {difficulty}\n"
         f"Cantidad: {count}\n"
-        f"Material opcional: {material_text or 'No provisto'}\n"
+        f"Material opcional: {material_label}\n"
+        f"Instruccion de fuente: {source_instruction}\n"
         "Responde un arreglo JSON con objetos {question_text, expected_answer}."
     )
 
@@ -85,7 +95,7 @@ def generate_questions(
         except Exception:
             continue
 
-    return _mock_generate_questions(topic, evaluation_type, difficulty, count)
+    return _mock_generate_questions(topic_value, evaluation_type, difficulty, count)
 
 
 def _mock_grade(raw_text: str, criteria: str, max_score: float) -> tuple[float, str]:
