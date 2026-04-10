@@ -18,9 +18,15 @@ function apiUrl(path) {
 }
 
 const el = {
+  authShell: document.getElementById("auth-shell"),
   authCard: document.getElementById("auth-card"),
   panelCard: document.getElementById("panel-card"),
   teacherLabel: document.getElementById("teacher-label"),
+  themeSelect: document.getElementById("theme-select"),
+  metricCourses: document.getElementById("metric-courses"),
+  metricStudents: document.getElementById("metric-students"),
+  metricEvaluations: document.getElementById("metric-evaluations"),
+  metricSchedules: document.getElementById("metric-schedules"),
   authMessage: document.getElementById("auth-status"),
   toast: document.getElementById("toast"),
   demoBanner: document.getElementById("demo-banner"),
@@ -34,6 +40,8 @@ const el = {
   studentsModalList: document.getElementById("students-modal-list"),
   subjectsModalList: document.getElementById("subjects-modal-list"),
 };
+
+const THEME_KEY = "evalia_theme";
 
 const forms = {
   register: document.getElementById("register-form"),
@@ -115,6 +123,23 @@ function showToast(message, isError = false) {
   el.toast.classList.remove("hidden");
   el.toast.style.background = isError ? "#7f1d1d" : "#0f172a";
   setTimeout(() => el.toast.classList.add("hidden"), 4200);
+}
+
+function setTheme(theme) {
+  const value = ["claro", "oscuro", "alto-contraste"].includes(theme) ? theme : "claro";
+  document.body.classList.remove("theme-oscuro", "theme-alto-contraste");
+  if (value === "oscuro") document.body.classList.add("theme-oscuro");
+  if (value === "alto-contraste") document.body.classList.add("theme-alto-contraste");
+  localStorage.setItem(THEME_KEY, value);
+  if (el.themeSelect) el.themeSelect.value = value;
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || "claro";
+  setTheme(saved);
+  if (el.themeSelect) {
+    el.themeSelect.addEventListener("change", () => setTheme(el.themeSelect.value));
+  }
 }
 
 function setAuthMessage(message, isError = false) {
@@ -255,6 +280,7 @@ function refreshModalLists() {
 
 function setLoggedInUI() {
   const loggedIn = Boolean(state.token && state.teacher);
+  if (el.authShell) el.authShell.classList.toggle("hidden", loggedIn);
   if (el.authCard) el.authCard.classList.toggle("hidden", loggedIn);
   if (el.panelCard) el.panelCard.classList.toggle("hidden", !loggedIn);
   if (el.teacherLabel) {
@@ -296,6 +322,11 @@ function fillSelect(select, items, getText, emptyLabel) {
 }
 
 function renderLists() {
+  if (el.metricCourses) el.metricCourses.textContent = String(state.courses.length);
+  if (el.metricStudents) el.metricStudents.textContent = String(state.students.length);
+  if (el.metricEvaluations) el.metricEvaluations.textContent = String(state.evaluations.length);
+  if (el.metricSchedules) el.metricSchedules.textContent = String(state.schedules.length);
+
   if (el.evaluationsList) {
     el.evaluationsList.innerHTML = state.evaluations.length
       ? state.evaluations
@@ -826,6 +857,16 @@ document.querySelectorAll("[data-open-modal]").forEach((button) => {
   });
 });
 
+document.querySelectorAll("[data-nav-target]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("[data-nav-target]").forEach((b) => b.classList.remove("is-active"));
+    button.classList.add("is-active");
+    const targetId = button.getAttribute("data-nav-target");
+    const section = targetId ? document.getElementById(targetId) : null;
+    if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
 document.querySelectorAll("[data-close-modal]").forEach((button) => {
   button.addEventListener("click", () => {
     const targetModal = button.getAttribute("data-close-modal");
@@ -844,6 +885,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeAllModals();
 });
 
+initTheme();
 setLoggedInUI();
 if (window.location.pathname === "/demo") {
   enableDemoMode();
