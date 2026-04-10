@@ -75,6 +75,7 @@ class EvaluationCreate(BaseModel):
     use_internal_knowledge: bool = True
     material_source_id: Optional[int] = None
     strict_material_only: bool = False
+    force_material_fallback: bool = False
 
 
 class EvaluationQuestionCreate(BaseModel):

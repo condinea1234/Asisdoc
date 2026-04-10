@@ -750,6 +750,18 @@ button.link-btn,
   color: var(--error-text);
 }
 
+.generation-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.generation-actions .secondary {
+  font-size: 0.85rem;
+  padding: 0.45rem 0.62rem;
+}
+
 .auth-status {
   margin: 0 0 0.7rem;
   border-radius: 9px;

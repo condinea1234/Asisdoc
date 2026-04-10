@@ -29,7 +29,7 @@ def _describe_provider_error(provider: str, exc: Exception) -> str:
         or "sin json" in normalized
     ):
         return (
-            f"{provider_label}: respuesta invalida del proveedor (sin JSON util). "
+            f"{provider_label}: respuesta invalida del proveedor. "
             "Reintentá en unos segundos."
         )
     if "http 429" in normalized or "quota" in normalized:
@@ -98,6 +98,7 @@ def generate_questions(
     material_text: Optional[str] = None,
     restrict_to_material: bool = False,
     allow_fallback: bool = True,
+    force_material_fallback: bool = False,
 ) -> GenerationResult:
     topic_value = (topic or "").strip() or "Tema general"
     material_value = (material_text or "").strip()
@@ -125,6 +126,21 @@ def generate_questions(
         f"Instruccion de formato: {format_instruction}\n"
         "Responde un arreglo JSON con objetos {question_text, expected_answer}."
     )
+
+    if force_material_fallback:
+        material_fallback = _material_fallback_generate_questions(
+            topic=topic_value,
+            evaluation_type=evaluation_type,
+            difficulty=difficulty,
+            count=count,
+            material_text=material_value,
+        )
+        if material_fallback:
+            return material_fallback, "material_fallback", True
+        raise RuntimeError(
+            "No se pudo generar con respaldo por material. "
+            "Verificá que el material tenga contenido legible."
+        )
 
     provider_errors: list[str] = []
     for provider in _provider_order():

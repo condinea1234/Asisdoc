@@ -355,6 +355,7 @@ def create_evaluation(
         payload.use_internal_knowledge and not payload.strict_material_only
     )
     material_available = bool((material_text or "").strip())
+    force_material_fallback = payload.strict_material_only or payload.force_material_fallback
     # Pol?tica solicitada: si no hay material y no responde IA, no crear evaluaci?n vac?a.
     # Solo se permite respaldo autom?tico cuando existe material cargado.
     allow_fallback = material_available
@@ -383,6 +384,7 @@ def create_evaluation(
             material_text=material_text,
             restrict_to_material=payload.strict_material_only,
             allow_fallback=allow_fallback,
+            force_material_fallback=force_material_fallback,
         )
     except RuntimeError as exc:
         db.rollback()

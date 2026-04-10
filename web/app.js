@@ -7,6 +7,7 @@ const state = {
   schedules: [],
   materials: [],
   demoMode: false,
+  lastEvaluationPayload: null,
 };
 
 const API_BASE_URL = (window.__ASISDOC_API_BASE__ || "/api").replace(/\/$/, "");
@@ -32,6 +33,8 @@ const el = {
   demoBanner: document.getElementById("demo-banner"),
   evaluationsList: document.getElementById("evaluations-list"),
   evaluationGenerationStatus: document.getElementById("evaluation-generation-status"),
+  evalRetryBtn: document.getElementById("eval-retry-btn"),
+  evalMaterialFallbackBtn: document.getElementById("eval-material-fallback-btn"),
   schedulesList: document.getElementById("schedules-list"),
   resultsBox: document.getElementById("results-box"),
   coursesModal: document.getElementById("courses-modal"),
@@ -159,10 +162,18 @@ function setEvaluationGenerationStatus(message, isError = false) {
   if (!message) {
     el.evaluationGenerationStatus.className = "inline-message info hidden";
     el.evaluationGenerationStatus.textContent = "";
+    toggleEvalActionButtons(false);
     return;
   }
   el.evaluationGenerationStatus.className = `inline-message ${isError ? "error" : "ok"}`;
   el.evaluationGenerationStatus.textContent = message;
+}
+
+function toggleEvalActionButtons(visible) {
+  [el.evalRetryBtn, el.evalMaterialFallbackBtn].forEach((button) => {
+    if (!button) return;
+    button.classList.toggle("hidden", !visible);
+  });
 }
 
 function formatProviderLabel(provider) {
@@ -193,6 +204,30 @@ async function apiJson(url, options = {}) {
     throw new Error(data?.detail || "Ocurrió un error en la solicitud.");
   }
   return data;
+}
+
+function buildEvaluationPayload({ forceMaterialFallback = false } = {}) {
+  const materialText = document.getElementById("eval-material").value.trim() || null;
+  const materialSourceId = Number(document.getElementById("eval-material-select").value) || null;
+  const strictMaterialOnly =
+    forceMaterialFallback || document.getElementById("eval-only-material").checked;
+  const useInternalKnowledge = forceMaterialFallback
+    ? false
+    : document.getElementById("eval-use-knowledge").checked;
+
+  return {
+    title: document.getElementById("eval-title").value.trim(),
+    topic: document.getElementById("eval-topic").value.trim() || null,
+    course_id: Number(document.getElementById("eval-course").value),
+    evaluation_type: document.getElementById("eval-type").value,
+    difficulty: document.getElementById("eval-difficulty").value,
+    question_count: Number(document.getElementById("eval-count").value),
+    material_text: materialText,
+    material_source_id: materialSourceId,
+    strict_material_only: strictMaterialOnly,
+    use_internal_knowledge: useInternalKnowledge,
+    force_material_fallback: forceMaterialFallback,
+  };
 }
 
 function closeAllModals() {
@@ -634,27 +669,18 @@ forms.student.addEventListener("submit", async (event) => {
 forms.evaluation.addEventListener("submit", async (event) => {
   event.preventDefault();
   setEvaluationGenerationStatus("");
+  toggleEvalActionButtons(false);
   if (state.demoMode) {
     showToast("Modo demo: acción simulada (no persiste).");
     return;
   }
   try {
+    const payload = buildEvaluationPayload();
+    state.lastEvaluationPayload = payload;
     const createdEvaluation = await apiJson("/evaluations", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({
-        title: document.getElementById("eval-title").value.trim(),
-        topic: document.getElementById("eval-topic").value.trim() || null,
-        course_id: Number(document.getElementById("eval-course").value),
-        evaluation_type: document.getElementById("eval-type").value,
-        difficulty: document.getElementById("eval-difficulty").value,
-        question_count: Number(document.getElementById("eval-count").value),
-        material_text: document.getElementById("eval-material").value.trim() || null,
-        material_source_id:
-          Number(document.getElementById("eval-material-select").value) || null,
-        strict_material_only: document.getElementById("eval-only-material").checked,
-        use_internal_knowledge: document.getElementById("eval-use-knowledge").checked,
-      }),
+      body: JSON.stringify(payload),
     });
     const provider = String(createdEvaluation?.generation_provider || "").trim();
     const providerLabel = formatProviderLabel(provider);
@@ -672,13 +698,88 @@ forms.evaluation.addEventListener("submit", async (event) => {
       setEvaluationGenerationStatus("Evaluación generada correctamente.");
     }
     forms.evaluation.reset();
+    state.lastEvaluationPayload = null;
+    toggleEvalActionButtons(false);
     await loadData();
     showToast("Evaluación generada.");
   } catch (error) {
     setEvaluationGenerationStatus(error.message, true);
+    toggleEvalActionButtons(true);
     showToast(error.message, true);
   }
 });
+
+if (el.evalRetryBtn) {
+  el.evalRetryBtn.addEventListener("click", async () => {
+    if (state.demoMode) {
+      showToast("Modo demo: acción simulada.");
+      return;
+    }
+    const payload = state.lastEvaluationPayload || buildEvaluationPayload();
+    try {
+      const createdEvaluation = await apiJson("/evaluations", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ ...payload, force_material_fallback: false }),
+      });
+      const provider = String(createdEvaluation?.generation_provider || "").trim();
+      const providerLabel = formatProviderLabel(provider);
+      setEvaluationGenerationStatus(
+        `Reintento exitoso con IA (${providerLabel || provider || "proveedor"}).`
+      );
+      toggleEvalActionButtons(false);
+      state.lastEvaluationPayload = null;
+      forms.evaluation.reset();
+      await loadData();
+      showToast("Evaluación generada en reintento.");
+    } catch (error) {
+      setEvaluationGenerationStatus(error.message, true);
+      toggleEvalActionButtons(true);
+      showToast(error.message, true);
+    }
+  });
+}
+
+if (el.evalMaterialFallbackBtn) {
+  el.evalMaterialFallbackBtn.addEventListener("click", async () => {
+    if (state.demoMode) {
+      showToast("Modo demo: acción simulada.");
+      return;
+    }
+    const payload = state.lastEvaluationPayload || buildEvaluationPayload();
+    const hasMaterial =
+      Boolean(payload.material_text && String(payload.material_text).trim()) ||
+      Boolean(payload.material_source_id);
+    if (!hasMaterial) {
+      const msg = "Para usar respaldo por material, primero cargá o pegá material en la evaluación.";
+      setEvaluationGenerationStatus(msg, true);
+      showToast(msg, true);
+      return;
+    }
+    try {
+      await apiJson("/evaluations", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          ...payload,
+          strict_material_only: true,
+          use_internal_knowledge: false,
+          force_material_fallback: true,
+        }),
+      });
+      setEvaluationGenerationStatus("Evaluación generada con respaldo por material.");
+      toggleEvalActionButtons(false);
+      state.lastEvaluationPayload = null;
+      forms.evaluation.reset();
+      await loadData();
+      showToast("Evaluación generada con respaldo por material.");
+    } catch (error) {
+      setEvaluationGenerationStatus(error.message, true);
+      toggleEvalActionButtons(true);
+      showToast(error.message, true);
+    }
+  });
+}
 
 forms.schedule.addEventListener("submit", async (event) => {
   event.preventDefault();
