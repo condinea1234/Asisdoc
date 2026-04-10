@@ -1,4 +1,5 @@
 import os
+import re
 from contextlib import suppress
 from datetime import datetime
 from io import BytesIO
@@ -6,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -631,29 +633,89 @@ def student_progress(
     )
 
 
+def _humanize_evaluation_type(evaluation_type: str) -> str:
+    mapping = {
+        "multiple_choice": "Opcion multiple",
+        "true_false": "Verdadero/Falso",
+        "matching": "Relacionar conceptos",
+        "open_answer": "Respuesta abierta",
+    }
+    return mapping.get(evaluation_type, evaluation_type)
+
+
+def _parse_multiple_choice_question(question_text: str) -> tuple[str, dict[str, str]]:
+    option_pattern = re.compile(r"^([A-D])[\)\.\-:]\s*(.+)$", flags=re.IGNORECASE)
+    lines = [line.strip() for line in question_text.splitlines() if line.strip()]
+    options: dict[str, str] = {}
+    stem_lines: list[str] = []
+    for line in lines:
+        match = option_pattern.match(line)
+        if match:
+            options[match.group(1).upper()] = match.group(2).strip()
+        else:
+            stem_lines.append(line)
+
+    stem = " ".join(stem_lines).strip() or question_text.strip()
+    return stem, options
+
+
+def _clean_export_stem(stem: str) -> str:
+    cleaned = stem.strip()
+    cleaned = re.sub(r"^\[[^\]]+\]\s*", "", cleaned)
+    cleaned = re.sub(r"^\([^)]+\)\s*", "", cleaned)
+    cleaned = re.sub(r"^Pregunta\s*\d+\s*:\s*", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip() or stem.strip()
+
+
 @app.get("/evaluations/{evaluation_id}/export-docx")
 def export_evaluation_docx(
     evaluation_id: int,
-    school_header: str = "Institución Educativa",
+    school_header: str = "Institucion Educativa",
     teacher_name: str = "Docente",
     db: Session = Depends(get_db),
     _: Teacher = Depends(get_current_teacher),
 ):
     evaluation = db.get(Evaluation, evaluation_id)
     if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+        raise HTTPException(status_code=404, detail="Evaluacion no encontrada")
 
     document = Document()
-    document.add_heading(school_header, level=1)
-    document.add_paragraph(f"Docente: {teacher_name}")
-    document.add_paragraph(f"Evaluación: {evaluation.title}")
-    document.add_paragraph(f"Tipo: {evaluation.evaluation_type}")
-    document.add_paragraph(f"Dificultad: {evaluation.difficulty}")
-    document.add_paragraph(" ")
-    document.add_paragraph("Nombre del alumno: ____________________")
-    document.add_paragraph("Curso: ____________________")
-    document.add_paragraph("Fecha: ____________________")
-    document.add_paragraph(" ")
+    title = document.add_heading(school_header, level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    subtitle = document.add_paragraph(f"Evaluacion: {evaluation.title}")
+    subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle.runs[0].bold = True
+
+    meta = document.add_paragraph()
+    meta.add_run("Docente: ").bold = True
+    meta.add_run(teacher_name)
+    meta.add_run("    |    ")
+    meta.add_run("Tipo: ").bold = True
+    meta.add_run(_humanize_evaluation_type(evaluation.evaluation_type))
+    meta.add_run("    |    ")
+    meta.add_run("Dificultad: ").bold = True
+    meta.add_run(evaluation.difficulty.capitalize())
+
+    document.add_paragraph("Nombre del alumno: ___________________________________________")
+    document.add_paragraph("Curso: _______________________________    Fecha: ____ / ____ / ______")
+
+    if evaluation.evaluation_type == "multiple_choice":
+        document.add_paragraph(
+            "Instrucciones: marque solo una opcion por pregunta con una X dentro de la casilla."
+        )
+    elif evaluation.evaluation_type == "true_false":
+        document.add_paragraph(
+            "Instrucciones: marque si cada afirmacion es Verdadera o Falsa."
+        )
+    elif evaluation.evaluation_type == "open_answer":
+        document.add_paragraph(
+            "Instrucciones: responda con claridad y fundamente cuando corresponda."
+        )
+    else:
+        document.add_paragraph("Instrucciones: complete cada consigna segun lo solicitado.")
+
+    document.add_paragraph("")
 
     questions = (
         db.query(EvaluationQuestion)
@@ -662,7 +724,28 @@ def export_evaluation_docx(
         .all()
     )
     for idx, q in enumerate(questions, start=1):
-        document.add_paragraph(f"{idx}. {q.question_text}")
+        if evaluation.evaluation_type == "multiple_choice":
+            stem, options = _parse_multiple_choice_question(q.question_text)
+            prompt = document.add_paragraph(f"{idx}. {_clean_export_stem(stem)}")
+            prompt.runs[0].bold = True
+            for letter in ("A", "B", "C", "D"):
+                option_text = options.get(letter, "________________________________")
+                document.add_paragraph(f"   [ ] {letter}) {option_text}")
+            document.add_paragraph("")
+            continue
+
+        if evaluation.evaluation_type == "true_false":
+            prompt = document.add_paragraph(f"{idx}. {_clean_export_stem(q.question_text)}")
+            prompt.runs[0].bold = True
+            document.add_paragraph("   [ ] Verdadero      [ ] Falso")
+            document.add_paragraph("")
+            continue
+
+        document.add_paragraph(f"{idx}. {_clean_export_stem(q.question_text)}")
+        if evaluation.evaluation_type == "open_answer":
+            document.add_paragraph("Respuesta: _________________________________________________")
+            document.add_paragraph("____________________________________________________________")
+            document.add_paragraph("")
 
     file_stream = BytesIO()
     document.save(file_stream)
