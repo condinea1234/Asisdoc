@@ -16,6 +16,33 @@ QuestionItem = tuple[str, Optional[str]]
 GenerationResult = tuple[list[QuestionItem], str, bool]
 
 
+def _describe_provider_error(provider: str, exc: Exception) -> str:
+    raw_message = str(exc or "").strip()
+    normalized = raw_message.lower()
+    provider_label = "Gemini" if provider == "gemini" else "OpenAI"
+
+    if "http 429" in normalized or "quota" in normalized:
+        return (
+            f"{provider_label}: límite de cuota o tasa excedido (429). "
+            "Esperá unos minutos o revisá el plan/cuota."
+        )
+    if "http 403" in normalized or "permission_denied" in normalized:
+        return (
+            f"{provider_label}: acceso denegado (403). "
+            "Verificá permisos de la API y restricciones de la clave."
+        )
+    if "http 404" in normalized or "not found" in normalized or "model" in normalized:
+        return (
+            f"{provider_label}: modelo no disponible o inválido. "
+            "Revisá la variable de modelo configurada."
+        )
+    if "timed out" in normalized or "timeout" in normalized:
+        return f"{provider_label}: timeout de red al consultar el proveedor."
+    if not raw_message:
+        return f"{provider_label}: error no especificado en la llamada al proveedor."
+    return f"{provider_label}: {raw_message[:220]}"
+
+
 def _mock_generate_questions(
     topic: str,
     evaluation_type: str,
@@ -86,6 +113,7 @@ def generate_questions(
         "Responde un arreglo JSON con objetos {question_text, expected_answer}."
     )
 
+    provider_errors: list[str] = []
     for provider in _provider_order():
         try:
             if provider == "gemini":
@@ -115,13 +143,16 @@ def generate_questions(
                 result.append((question_text, expected_answer))
             if result:
                 return result, provider, False
-        except Exception:
+        except Exception as exc:
+            provider_errors.append(_describe_provider_error(provider, exc))
             continue
 
     if not allow_fallback:
+        details = "; ".join(provider_errors) if provider_errors else "Sin proveedores configurados."
         raise RuntimeError(
             "La IA no esta disponible para generar preguntas en este momento. "
-            "Intenta nuevamente o carga material para usar modo de respaldo."
+            "Intenta nuevamente o carga material para usar modo de respaldo. "
+            f"Detalle técnico: {details}"
         )
 
     material_fallback = _material_fallback_generate_questions(
