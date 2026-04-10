@@ -169,7 +169,27 @@ gcloud auth application-default login
 firebase login
 ```
 
-### 2) Desplegar backend en Cloud Run
+### 2) (Opcional recomendado) Provisión de base de datos persistente
+
+Para producción real con datos persistentes, usar PostgreSQL administrado (Cloud SQL):
+
+```bash
+export PROJECT_ID="evalia-ia"
+export REGION="us-central1"
+export DB_INSTANCE="evalia-db"
+export DB_NAME="evalia"
+export DB_USER="evalia_user"
+export DB_PASSWORD="cambia-esta-clave-segura"
+
+./scripts/provision_cloudsql.sh
+```
+
+Esto:
+- crea instancia Cloud SQL PostgreSQL
+- crea base y usuario
+- deja lista la conexión para Cloud Run
+
+### 3) Desplegar backend en Cloud Run
 
 El repositorio ya incluye:
 
@@ -180,25 +200,32 @@ El repositorio ya incluye:
 Ejemplo:
 
 ```bash
-export GCP_PROJECT_ID="tu-proyecto"
-export GCP_REGION="us-central1"
-export CLOUD_RUN_SERVICE="evalia-api"
+export PROJECT_ID="evalia-ia"
+export REGION="us-central1"
+export SERVICE_NAME="evalia-api"
 
 # Opcional IA:
 export AI_PROVIDER="gemini"
 export GEMINI_API_KEY="tu_api_key_gemini"
 export GEMINI_MODEL="gemini-1.5-flash"
 
-./scripts/deploy_cloudrun.sh
+# Para persistencia real:
+export DB_INSTANCE="evalia-db"
+export DB_NAME="evalia"
+export DB_USER="evalia_user"
+export DB_PASSWORD="cambia-esta-clave-segura"
+
+./scripts/deploy_cloudrun.sh "$PROJECT_ID" "$REGION"
 ```
 
 El script:
 
 - construye imagen con Cloud Build
 - despliega servicio Cloud Run
+- si detecta `DB_*`, conecta Cloud SQL con `DATABASE_URL` (Postgres)
 - imprime URL pública del backend
 
-### 3) Configurar Firebase Hosting
+### 4) Configurar Firebase Hosting
 
 Ya están creados:
 
@@ -214,11 +241,10 @@ Actualizá en `firebase.json` la URL del backend Cloud Run:
 Luego:
 
 ```bash
-export FIREBASE_PROJECT_ID="evalia-ia"
-./scripts/deploy_firebase.sh
+./scripts/deploy_firebase.sh evalia-ia evalia-api us-central1
 ```
 
-### 4) Cómo queda el acceso
+### 5) Cómo queda el acceso
 
 - `https://<tu-site>.web.app/` -> panel web
 - `https://<tu-site>.web.app/demo` -> vista demo

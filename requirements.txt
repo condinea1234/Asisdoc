@@ -10,3 +10,4 @@ openai
 pytesseract
 Pillow
 pypdf
+psycopg[binary]
