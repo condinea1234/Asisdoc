@@ -21,6 +21,17 @@ def _describe_provider_error(provider: str, exc: Exception) -> str:
     normalized = raw_message.lower()
     provider_label = "Gemini" if provider == "gemini" else "OpenAI"
 
+    if (
+        "expecting value" in normalized
+        or "jsondecodeerror" in normalized
+        or "no contiene un arreglo json" in normalized
+        or "respuesta vacia del proveedor" in normalized
+        or "sin json" in normalized
+    ):
+        return (
+            f"{provider_label}: respuesta invalida del proveedor (sin JSON util). "
+            "Reintentá en unos segundos."
+        )
     if "http 429" in normalized or "quota" in normalized:
         return (
             f"{provider_label}: límite de cuota o tasa excedido (429). "
@@ -38,6 +49,8 @@ def _describe_provider_error(provider: str, exc: Exception) -> str:
         )
     if "timed out" in normalized or "timeout" in normalized:
         return f"{provider_label}: timeout de red al consultar el proveedor."
+    if "respuesta vacía del proveedor" in normalized or "respuesta vacia del proveedor" in normalized:
+        return f"{provider_label}: respuesta vacía del proveedor. Reintentá en unos segundos."
     if not raw_message:
         return f"{provider_label}: error no especificado en la llamada al proveedor."
     return f"{provider_label}: {raw_message[:220]}"
@@ -120,6 +133,8 @@ def generate_questions(
                 output_text = _generate_text_with_gemini(prompt, max_output_tokens=1400)
             else:
                 output_text = _generate_text_with_openai(prompt, max_output_tokens=1400)
+            if not (output_text or "").strip():
+                raise RuntimeError("Respuesta vacia del proveedor (sin JSON).")
 
             parsed = _extract_json_array((output_text or "").strip())
             result: list[tuple[str, Optional[str]]] = []
@@ -373,13 +388,24 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
 
 
 def _extract_json_array(text: str) -> list:
+    normalized = (text or "").strip()
+    if not normalized:
+        raise ValueError("Respuesta vacia del proveedor (sin JSON).")
     try:
-        return json.loads(text)
+        parsed = json.loads(normalized)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            if isinstance(parsed.get("questions"), list):
+                return parsed["questions"]
+            if isinstance(parsed.get("items"), list):
+                return parsed["items"]
+        raise ValueError("La respuesta no contiene un arreglo JSON valido.")
     except Exception:
-        match = re.search(r"\[[\s\S]*\]", text)
+        match = re.search(r"\[[\s\S]*\]", normalized)
         if match:
             return json.loads(match.group(0))
-        raise
+        raise ValueError("La respuesta no contiene un arreglo JSON valido.")
 
 
 def _extract_json_object(text: str) -> dict:
