@@ -12,20 +12,27 @@ from openai import OpenAI
 from PIL import Image
 from docx import Document
 
+QuestionItem = tuple[str, Optional[str]]
+GenerationResult = tuple[list[QuestionItem], str, bool]
+
 
 def _mock_generate_questions(
     topic: str,
     evaluation_type: str,
     difficulty: str,
     count: int,
-) -> list[tuple[str, Optional[str]]]:
+) -> list[QuestionItem]:
     questions = []
     for idx in range(1, count + 1):
         if evaluation_type == "multiple_choice":
             question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Selecciona la opcion correcta."
+                f"[{difficulty}] ({topic}) Pregunta {idx}: Selecciona la opción correcta.\n"
+                f"A) {topic}: definición principal.\n"
+                f"B) {topic}: ejemplo secundario.\n"
+                f"C) {topic}: afirmación incorrecta.\n"
+                f"D) {topic}: dato irrelevante."
             )
-            answer = "Opcion A"
+            answer = "A"
         elif evaluation_type == "true_false":
             question = f"[{difficulty}] ({topic}) Pregunta {idx}: Verdadero o Falso."
             answer = "Verdadero"
@@ -50,10 +57,17 @@ def generate_questions(
     count: int,
     material_text: Optional[str] = None,
     restrict_to_material: bool = False,
-) -> list[tuple[str, Optional[str]]]:
+) -> GenerationResult:
     topic_value = (topic or "").strip() or "Tema general"
     material_value = (material_text or "").strip()
     material_label = material_value if material_value else "No provisto"
+    format_instruction = (
+        "Si el tipo es multiple_choice, cada question_text debe incluir 4 opciones "
+        "marcadas como A), B), C), D) en líneas separadas y expected_answer debe ser "
+        "la letra correcta (A, B, C o D)."
+        if evaluation_type == "multiple_choice"
+        else "Si no aplica, expected_answer puede ser null."
+    )
     source_instruction = (
         "Debes basarte exclusivamente en el material provisto."
         if restrict_to_material
@@ -67,6 +81,7 @@ def generate_questions(
         f"Cantidad: {count}\n"
         f"Material opcional: {material_label}\n"
         f"Instruccion de fuente: {source_instruction}\n"
+        f"Instruccion de formato: {format_instruction}\n"
         "Responde un arreglo JSON con objetos {question_text, expected_answer}."
     )
 
@@ -80,22 +95,62 @@ def generate_questions(
             parsed = _extract_json_array((output_text or "").strip())
             result: list[tuple[str, Optional[str]]] = []
             for item in parsed[:count]:
-                result.append(
-                    (
-                        str(item.get("question_text", "")).strip() or "Pregunta generica",
-                        (
-                            str(item.get("expected_answer", "")).strip()
-                            if item.get("expected_answer") is not None
-                            else None
-                        ),
-                    )
+                question_text = (
+                    str(item.get("question_text", "")).strip() or "Pregunta genérica"
                 )
+                expected_answer = (
+                    str(item.get("expected_answer", "")).strip()
+                    if item.get("expected_answer") is not None
+                    else None
+                )
+                if evaluation_type == "multiple_choice":
+                    question_text, expected_answer = _normalize_multiple_choice(
+                        question_text=question_text,
+                        expected_answer=expected_answer,
+                        topic=topic_value,
+                        difficulty=difficulty,
+                        idx=len(result) + 1,
+                    )
+                result.append((question_text, expected_answer))
             if result:
-                return result
+                return result, provider, False
         except Exception:
             continue
 
-    return _mock_generate_questions(topic_value, evaluation_type, difficulty, count)
+    return (
+        _mock_generate_questions(topic_value, evaluation_type, difficulty, count),
+        "mock",
+        True,
+    )
+
+
+def _normalize_multiple_choice(
+    question_text: str,
+    expected_answer: Optional[str],
+    topic: str,
+    difficulty: str,
+    idx: int,
+) -> QuestionItem:
+    has_options = bool(re.search(r"(^|\n)\s*[A-D][\)\.\-:]", question_text, flags=re.I))
+    normalized_question = question_text.strip()
+    if not has_options:
+        normalized_question = (
+            f"[{difficulty}] ({topic}) Pregunta {idx}: {normalized_question}\n"
+            f"A) Concepto central de {topic}.\n"
+            f"B) Definición parcialmente correcta de {topic}.\n"
+            f"C) Idea incorrecta sobre {topic}.\n"
+            f"D) Dato no relacionado con {topic}."
+        )
+
+    normalized_answer = (expected_answer or "").strip().upper()
+    if normalized_answer:
+        match = re.search(r"\b([A-D])\b", normalized_answer)
+        if match:
+            normalized_answer = match.group(1)
+    if not normalized_answer:
+        normalized_answer = "A"
+
+    return normalized_question, normalized_answer
 
 
 def _mock_grade(raw_text: str, criteria: str, max_score: float) -> tuple[float, str]:

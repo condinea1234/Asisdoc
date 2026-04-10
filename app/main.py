@@ -368,7 +368,7 @@ def create_evaluation(
 
     effective_topic = (payload.topic or "").strip() or payload.title
 
-    generated_questions = generate_questions(
+    generated_questions, generation_provider, used_fallback = generate_questions(
         topic=effective_topic,
         evaluation_type=payload.evaluation_type,
         difficulty=payload.difficulty,
@@ -385,6 +385,9 @@ def create_evaluation(
 
     db.commit()
     db.refresh(evaluation)
+    # Metadatos de trazabilidad para que el frontend informe IA real vs respaldo.
+    evaluation.generation_provider = generation_provider
+    evaluation.used_fallback = used_fallback
     return evaluation
 
 

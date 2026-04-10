@@ -103,6 +103,8 @@ class EvaluationRead(BaseModel):
     strict_material_only: bool
     created_at: datetime
     questions: list[EvaluationQuestionRead] = []
+    generation_provider: Optional[str] = None
+    used_fallback: Optional[bool] = None
 
     class Config:
         from_attributes = True

@@ -738,6 +738,18 @@ button.link-btn,
   color: #1e3a8a;
 }
 
+.inline-message.ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-line);
+  color: var(--ok-text);
+}
+
+.inline-message.error {
+  background: var(--error-bg);
+  border-color: var(--error-line);
+  color: var(--error-text);
+}
+
 .auth-status {
   margin: 0 0 0.7rem;
   border-radius: 9px;

@@ -31,6 +31,7 @@ const el = {
   toast: document.getElementById("toast"),
   demoBanner: document.getElementById("demo-banner"),
   evaluationsList: document.getElementById("evaluations-list"),
+  evaluationGenerationStatus: document.getElementById("evaluation-generation-status"),
   schedulesList: document.getElementById("schedules-list"),
   resultsBox: document.getElementById("results-box"),
   coursesModal: document.getElementById("courses-modal"),
@@ -151,6 +152,17 @@ function setAuthMessage(message, isError = false) {
   }
   el.authMessage.className = `auth-status ${isError ? "error" : "ok"}`;
   el.authMessage.textContent = message;
+}
+
+function setEvaluationGenerationStatus(message, isError = false) {
+  if (!el.evaluationGenerationStatus) return;
+  if (!message) {
+    el.evaluationGenerationStatus.className = "inline-message info hidden";
+    el.evaluationGenerationStatus.textContent = "";
+    return;
+  }
+  el.evaluationGenerationStatus.className = `inline-message ${isError ? "error" : "ok"}`;
+  el.evaluationGenerationStatus.textContent = message;
 }
 
 function authHeaders(extra = {}) {
@@ -611,12 +623,13 @@ forms.student.addEventListener("submit", async (event) => {
 
 forms.evaluation.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setEvaluationGenerationStatus("");
   if (state.demoMode) {
     showToast("Modo demo: acción simulada (no persiste).");
     return;
   }
   try {
-    await apiJson("/evaluations", {
+    const createdEvaluation = await apiJson("/evaluations", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
@@ -633,10 +646,23 @@ forms.evaluation.addEventListener("submit", async (event) => {
         use_internal_knowledge: document.getElementById("eval-use-knowledge").checked,
       }),
     });
+    const provider = String(createdEvaluation?.generation_provider || "").trim();
+    const usedFallback = Boolean(createdEvaluation?.used_fallback);
+    if (usedFallback) {
+      setEvaluationGenerationStatus(
+        "Generación realizada en modo respaldo. Revisá cuota o credenciales de IA.",
+        true
+      );
+    } else if (provider) {
+      setEvaluationGenerationStatus(`Generación realizada con IA real (${provider}).`);
+    } else {
+      setEvaluationGenerationStatus("Evaluación generada correctamente.");
+    }
     forms.evaluation.reset();
     await loadData();
     showToast("Evaluación generada.");
   } catch (error) {
+    setEvaluationGenerationStatus(error.message, true);
     showToast(error.message, true);
   }
 });
