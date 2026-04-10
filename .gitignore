@@ -9,3 +9,4 @@ local.db
 uploads/
 .preview_logs/
 .firebase/
+google-cloud-sdk/
