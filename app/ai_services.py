@@ -57,6 +57,7 @@ def generate_questions(
     count: int,
     material_text: Optional[str] = None,
     restrict_to_material: bool = False,
+    allow_fallback: bool = True,
 ) -> GenerationResult:
     topic_value = (topic or "").strip() or "Tema general"
     material_value = (material_text or "").strip()
@@ -117,11 +118,80 @@ def generate_questions(
         except Exception:
             continue
 
-    return (
-        _mock_generate_questions(topic_value, evaluation_type, difficulty, count),
-        "mock",
-        True,
+    if not allow_fallback:
+        raise RuntimeError(
+            "La IA no esta disponible para generar preguntas en este momento. "
+            "Intenta nuevamente o carga material para usar modo de respaldo."
+        )
+
+    material_fallback = _material_fallback_generate_questions(
+        topic=topic_value,
+        evaluation_type=evaluation_type,
+        difficulty=difficulty,
+        count=count,
+        material_text=material_value,
     )
+    if material_fallback:
+        return material_fallback, "material_fallback", True
+
+    return _mock_generate_questions(topic_value, evaluation_type, difficulty, count), "mock", True
+
+
+def _material_fallback_generate_questions(
+    topic: str,
+    evaluation_type: str,
+    difficulty: str,
+    count: int,
+    material_text: str,
+) -> list[QuestionItem]:
+    cleaned_material = " ".join((material_text or "").split())
+    if not cleaned_material:
+        return []
+
+    sentences = [
+        s.strip()
+        for s in re.split(r"(?<=[\.\!\?])\s+", cleaned_material)
+        if len(s.strip()) >= 25
+    ]
+    if not sentences:
+        sentences = [cleaned_material[:220]]
+
+    questions: list[QuestionItem] = []
+    for idx in range(1, count + 1):
+        fragment = sentences[(idx - 1) % len(sentences)]
+        fragment = fragment[:220].rstrip()
+
+        if evaluation_type == "multiple_choice":
+            question = (
+                f"[{difficulty}] ({topic}) Pregunta {idx}: Segun el material, selecciona la afirmacion correcta.\n"
+                f"A) {fragment}\n"
+                "B) El material contradice esta afirmacion.\n"
+                "C) El texto no desarrolla este contenido.\n"
+                "D) No existe evidencia en el material."
+            )
+            answer = "A"
+        elif evaluation_type == "true_false":
+            question = (
+                f"[{difficulty}] ({topic}) Pregunta {idx}: "
+                f"Segun el material, la siguiente afirmacion es verdadera: \"{fragment}\"."
+            )
+            answer = "Verdadero"
+        elif evaluation_type == "matching":
+            question = (
+                f"[{difficulty}] ({topic}) Pregunta {idx}: Relaciona conceptos usando este fragmento base: "
+                f"\"{fragment}\"."
+            )
+            answer = None
+        else:
+            question = (
+                f"[{difficulty}] ({topic}) Pregunta {idx}: "
+                f"Explica con tus palabras este punto del material: \"{fragment}\"."
+            )
+            answer = None
+
+        questions.append((question, answer))
+
+    return questions
 
 
 def _normalize_multiple_choice(

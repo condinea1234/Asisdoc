@@ -165,6 +165,16 @@ function setEvaluationGenerationStatus(message, isError = false) {
   el.evaluationGenerationStatus.textContent = message;
 }
 
+function formatProviderLabel(provider) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "gemini") return "Gemini";
+  if (normalized === "openai") return "OpenAI";
+  if (normalized === "material_fallback") return "Respaldo por material";
+  if (normalized === "mock") return "Respaldo local";
+  return provider;
+}
+
 function authHeaders(extra = {}) {
   const headers = { ...extra };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -647,14 +657,17 @@ forms.evaluation.addEventListener("submit", async (event) => {
       }),
     });
     const provider = String(createdEvaluation?.generation_provider || "").trim();
+    const providerLabel = formatProviderLabel(provider);
     const usedFallback = Boolean(createdEvaluation?.used_fallback);
     if (usedFallback) {
       setEvaluationGenerationStatus(
-        "Generación realizada en modo respaldo. Revisá cuota o credenciales de IA.",
+        `Generación realizada en modo respaldo (${providerLabel || "respaldo"}).`,
         true
       );
     } else if (provider) {
-      setEvaluationGenerationStatus(`Generación realizada con IA real (${provider}).`);
+      setEvaluationGenerationStatus(
+        `Generación realizada con IA real (${providerLabel || provider}).`
+      );
     } else {
       setEvaluationGenerationStatus("Evaluación generada correctamente.");
     }

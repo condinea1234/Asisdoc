@@ -354,6 +354,10 @@ def create_evaluation(
     use_internal_knowledge = (
         payload.use_internal_knowledge and not payload.strict_material_only
     )
+    material_available = bool((material_text or "").strip())
+    # Pol?tica solicitada: si no hay material y no responde IA, no crear evaluaci?n vac?a.
+    # Solo se permite respaldo autom?tico cuando existe material cargado.
+    allow_fallback = material_available
 
     evaluation = Evaluation(
         title=payload.title,
@@ -370,14 +374,19 @@ def create_evaluation(
 
     effective_topic = (payload.topic or "").strip() or payload.title
 
-    generated_questions, generation_provider, used_fallback = generate_questions(
-        topic=effective_topic,
-        evaluation_type=payload.evaluation_type,
-        difficulty=payload.difficulty,
-        count=payload.question_count,
-        material_text=material_text,
-        restrict_to_material=payload.strict_material_only,
-    )
+    try:
+        generated_questions, generation_provider, used_fallback = generate_questions(
+            topic=effective_topic,
+            evaluation_type=payload.evaluation_type,
+            difficulty=payload.difficulty,
+            count=payload.question_count,
+            material_text=material_text,
+            restrict_to_material=payload.strict_material_only,
+            allow_fallback=allow_fallback,
+        )
+    except RuntimeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     for question, answer in generated_questions:
         db.add(
             EvaluationQuestion(
