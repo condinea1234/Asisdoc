@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import time
+import time
 from pathlib import Path
 from typing import Optional
 from urllib import error as urlerror
@@ -144,39 +146,47 @@ def generate_questions(
 
     provider_errors: list[str] = []
     for provider in _provider_order():
-        try:
-            if provider == "gemini":
-                output_text = _generate_text_with_gemini(prompt, max_output_tokens=1400)
-            else:
-                output_text = _generate_text_with_openai(prompt, max_output_tokens=1400)
-            if not (output_text or "").strip():
-                raise RuntimeError("Respuesta vacia del proveedor (sin JSON).")
+        provider_error: Optional[Exception] = None
+        for attempt in range(1, 4):
+            try:
+                if provider == "gemini":
+                    output_text = _generate_text_with_gemini(prompt, max_output_tokens=1400)
+                else:
+                    output_text = _generate_text_with_openai(prompt, max_output_tokens=1400)
+                if not (output_text or "").strip():
+                    raise RuntimeError("Respuesta vacia del proveedor.")
 
-            parsed = _extract_json_array((output_text or "").strip())
-            result: list[tuple[str, Optional[str]]] = []
-            for item in parsed[:count]:
-                question_text = (
-                    str(item.get("question_text", "")).strip() or "Pregunta genérica"
-                )
-                expected_answer = (
-                    str(item.get("expected_answer", "")).strip()
-                    if item.get("expected_answer") is not None
-                    else None
-                )
-                if evaluation_type == "multiple_choice":
-                    question_text, expected_answer = _normalize_multiple_choice(
-                        question_text=question_text,
-                        expected_answer=expected_answer,
-                        topic=topic_value,
-                        difficulty=difficulty,
-                        idx=len(result) + 1,
+                parsed = _extract_json_array((output_text or "").strip())
+                result: list[tuple[str, Optional[str]]] = []
+                for item in parsed[:count]:
+                    question_text = (
+                        str(item.get("question_text", "")).strip() or "Pregunta genérica"
                     )
-                result.append((question_text, expected_answer))
-            if result:
-                return result, provider, False
-        except Exception as exc:
-            provider_errors.append(_describe_provider_error(provider, exc))
-            continue
+                    expected_answer = (
+                        str(item.get("expected_answer", "")).strip()
+                        if item.get("expected_answer") is not None
+                        else None
+                    )
+                    if evaluation_type == "multiple_choice":
+                        question_text, expected_answer = _normalize_multiple_choice(
+                            question_text=question_text,
+                            expected_answer=expected_answer,
+                            topic=topic_value,
+                            difficulty=difficulty,
+                            idx=len(result) + 1,
+                        )
+                    result.append((question_text, expected_answer))
+                if result:
+                    return result, provider, False
+                provider_error = RuntimeError("El proveedor no devolvio preguntas válidas.")
+            except Exception as exc:
+                provider_error = exc
+                if attempt < 3:
+                    time.sleep(0.5 * attempt)
+                    continue
+        if provider_error:
+            provider_errors.append(_describe_provider_error(provider, provider_error))
+        continue
 
     if not allow_fallback:
         details = "; ".join(provider_errors) if provider_errors else "Sin proveedores configurados."
@@ -487,6 +497,7 @@ def _generate_text_with_gemini(prompt: str, max_output_tokens: int) -> str:
         "generationConfig": {
             "temperature": 0.2,
             "maxOutputTokens": max_output_tokens,
+            "responseMimeType": "application/json",
         },
     }
     data = json.dumps(payload).encode("utf-8")
