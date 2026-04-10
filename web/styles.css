@@ -762,6 +762,13 @@ button.link-btn,
   padding: 0.45rem 0.62rem;
 }
 
+.generation-diagnostic {
+  margin-top: 0.42rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .auth-status {
   margin: 0 0 0.7rem;
   border-radius: 9px;

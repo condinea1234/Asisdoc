@@ -33,8 +33,10 @@ const el = {
   demoBanner: document.getElementById("demo-banner"),
   evaluationsList: document.getElementById("evaluations-list"),
   evaluationGenerationStatus: document.getElementById("evaluation-generation-status"),
-  evalRetryBtn: document.getElementById("eval-retry-btn"),
-  evalMaterialFallbackBtn: document.getElementById("eval-material-fallback-btn"),
+  evaluationStatusHint: document.getElementById("evaluation-generation-hint"),
+  evaluationActions: document.getElementById("evaluation-actions"),
+  evalRetryBtn: document.getElementById("retry-ai-btn"),
+  evalMaterialFallbackBtn: document.getElementById("use-material-fallback-btn"),
   schedulesList: document.getElementById("schedules-list"),
   resultsBox: document.getElementById("results-box"),
   coursesModal: document.getElementById("courses-modal"),
@@ -162,6 +164,10 @@ function setEvaluationGenerationStatus(message, isError = false) {
   if (!message) {
     el.evaluationGenerationStatus.className = "inline-message info hidden";
     el.evaluationGenerationStatus.textContent = "";
+    if (el.evaluationStatusHint) {
+      el.evaluationStatusHint.classList.add("hidden");
+      el.evaluationStatusHint.textContent = "";
+    }
     toggleEvalActionButtons(false);
     return;
   }
@@ -170,10 +176,29 @@ function setEvaluationGenerationStatus(message, isError = false) {
 }
 
 function toggleEvalActionButtons(visible) {
-  [el.evalRetryBtn, el.evalMaterialFallbackBtn].forEach((button) => {
-    if (!button) return;
-    button.classList.toggle("hidden", !visible);
-  });
+  if (el.evaluationActions) {
+    el.evaluationActions.classList.toggle("hidden", !visible);
+  }
+}
+
+function buildGenerationHint(message) {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("429") || text.includes("cuota") || text.includes("tasa")) {
+    return "Sugerencia: se alcanzó un límite temporal. Reintentá en 30-60 segundos.";
+  }
+  if (text.includes("403") || text.includes("acceso denegado")) {
+    return "Sugerencia: revisá permisos/restricciones de la API key en Google Cloud.";
+  }
+  if (text.includes("404") || text.includes("modelo")) {
+    return "Sugerencia: el modelo configurado no está disponible para esta clave.";
+  }
+  if (text.includes("respuesta invalida") || text.includes("respuesta vacía")) {
+    return "Sugerencia: reintentá con IA; si persiste, usá respaldo por material.";
+  }
+  if (text.includes("sin proveedores configurados")) {
+    return "Sugerencia: falta configurar API key del proveedor de IA en el backend.";
+  }
+  return "Sugerencia: reintentá y, si vuelve a fallar, generá con respaldo por material.";
 }
 
 function formatProviderLabel(provider) {
@@ -228,6 +253,15 @@ function buildEvaluationPayload({ forceMaterialFallback = false } = {}) {
     use_internal_knowledge: useInternalKnowledge,
     force_material_fallback: forceMaterialFallback,
   };
+}
+
+function setGenerationError(errorMessage) {
+  const message = String(errorMessage || "Error al generar evaluación.");
+  setEvaluationGenerationStatus(message, true);
+  if (el.evaluationStatusHint) {
+    el.evaluationStatusHint.textContent = buildGenerationHint(message);
+    el.evaluationStatusHint.classList.remove("hidden");
+  }
 }
 
 function closeAllModals() {
@@ -703,7 +737,7 @@ forms.evaluation.addEventListener("submit", async (event) => {
     await loadData();
     showToast("Evaluación generada.");
   } catch (error) {
-    setEvaluationGenerationStatus(error.message, true);
+    setGenerationError(error.message);
     toggleEvalActionButtons(true);
     showToast(error.message, true);
   }
@@ -733,7 +767,7 @@ if (el.evalRetryBtn) {
       await loadData();
       showToast("Evaluación generada en reintento.");
     } catch (error) {
-      setEvaluationGenerationStatus(error.message, true);
+      setGenerationError(error.message);
       toggleEvalActionButtons(true);
       showToast(error.message, true);
     }
@@ -752,7 +786,7 @@ if (el.evalMaterialFallbackBtn) {
       Boolean(payload.material_source_id);
     if (!hasMaterial) {
       const msg = "Para usar respaldo por material, primero cargá o pegá material en la evaluación.";
-      setEvaluationGenerationStatus(msg, true);
+      setGenerationError(msg);
       showToast(msg, true);
       return;
     }
@@ -774,7 +808,7 @@ if (el.evalMaterialFallbackBtn) {
       await loadData();
       showToast("Evaluación generada con respaldo por material.");
     } catch (error) {
-      setEvaluationGenerationStatus(error.message, true);
+      setGenerationError(error.message);
       toggleEvalActionButtons(true);
       showToast(error.message, true);
     }
