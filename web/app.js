@@ -8,6 +8,7 @@ const state = {
   materials: [],
   demoMode: false,
   lastEvaluationPayload: null,
+  isGeneratingEvaluation: false,
 };
 
 const API_BASE_URL = (window.__ASISDOC_API_BASE__ || "/api").replace(/\/$/, "");
@@ -35,6 +36,7 @@ const el = {
   evaluationGenerationStatus: document.getElementById("evaluation-generation-status"),
   evaluationStatusHint: document.getElementById("evaluation-generation-hint"),
   evaluationActions: document.getElementById("evaluation-actions"),
+  evalLoading: document.getElementById("eval-loading"),
   evalRetryBtn: document.getElementById("retry-ai-btn"),
   evalMaterialFallbackBtn: document.getElementById("use-material-fallback-btn"),
   schedulesList: document.getElementById("schedules-list"),
@@ -129,6 +131,23 @@ function showToast(message, isError = false) {
   el.toast.classList.remove("hidden");
   el.toast.style.background = isError ? "#7f1d1d" : "#0f172a";
   setTimeout(() => el.toast.classList.add("hidden"), 4200);
+}
+
+function setEvaluationGenerating(isLoading) {
+  state.isGeneratingEvaluation = Boolean(isLoading);
+  if (el.evalLoading) {
+    el.evalLoading.classList.toggle("hidden", !state.isGeneratingEvaluation);
+  }
+  const submitBtn = forms.evaluation?.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = state.isGeneratingEvaluation;
+    submitBtn.classList.toggle("loading-btn", state.isGeneratingEvaluation);
+    submitBtn.classList.toggle("is-loading", state.isGeneratingEvaluation);
+  }
+  [el.evalRetryBtn, el.evalMaterialFallbackBtn].forEach((button) => {
+    if (!button) return;
+    button.disabled = state.isGeneratingEvaluation;
+  });
 }
 
 function setTheme(theme) {
@@ -580,6 +599,72 @@ async function downloadEvaluationDocx(evaluationId) {
   URL.revokeObjectURL(url);
 }
 
+async function downloadCorrectionDocx(correctionId) {
+  const response = await fetch(apiUrl(`/corrections/${correctionId}/export-docx`), {
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    let detail = "No se pudo descargar el informe de corrección.";
+    try {
+      const json = await response.json();
+      detail = json?.detail || detail;
+    } catch (error) {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `correccion_${correctionId}.docx`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function renderCorrectionResult(submission, correction) {
+  const rawFeedback = String(correction?.feedback || "");
+  const [teacherFeedback, detailsRaw = "[]"] = rawFeedback.split("\n\nDETALLE_PREGUNTAS_JSON=");
+  let detailItems = [];
+  try {
+    detailItems = JSON.parse(detailsRaw);
+  } catch (error) {
+    detailItems = [];
+  }
+  const payload = {
+    entrega_id: submission.id,
+    puntaje: correction.score,
+    puntaje_maximo: correction.max_score,
+    devolucion_docente: (correction.detailed_feedback || teacherFeedback || "").trim(),
+    detalle_pregunta: detailItems,
+    exportar_informe: `Usá el botón "Descargar informe de corrección"`,
+  };
+  el.resultsBox.textContent = JSON.stringify(payload, null, 2);
+
+  if (!document.getElementById("download-correction-btn")) {
+    const button = document.createElement("button");
+    button.id = "download-correction-btn";
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = "Descargar informe de corrección";
+    button.addEventListener("click", async () => {
+      const correctionId = button.getAttribute("data-correction-id");
+      if (!correctionId) return;
+      try {
+        await downloadCorrectionDocx(Number(correctionId));
+        showToast("Informe de corrección descargado.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+    el.resultsBox.insertAdjacentElement("afterend", button);
+  }
+  const downloadBtn = document.getElementById("download-correction-btn");
+  downloadBtn.setAttribute("data-correction-id", String(correction.id));
+}
+
 forms.register.addEventListener("submit", async (event) => {
   event.preventDefault();
   setAuthMessage("");
@@ -702,10 +787,13 @@ forms.student.addEventListener("submit", async (event) => {
 
 forms.evaluation.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (state.isGeneratingEvaluation) return;
   setEvaluationGenerationStatus("");
   toggleEvalActionButtons(false);
+  setEvaluationGenerating(true);
   if (state.demoMode) {
     showToast("Modo demo: acción simulada (no persiste).");
+    setEvaluationGenerating(false);
     return;
   }
   try {
@@ -740,16 +828,20 @@ forms.evaluation.addEventListener("submit", async (event) => {
     setGenerationError(error.message);
     toggleEvalActionButtons(true);
     showToast(error.message, true);
+  } finally {
+    setEvaluationGenerating(false);
   }
 });
 
 if (el.evalRetryBtn) {
   el.evalRetryBtn.addEventListener("click", async () => {
+    if (state.isGeneratingEvaluation) return;
     if (state.demoMode) {
       showToast("Modo demo: acción simulada.");
       return;
     }
     const payload = state.lastEvaluationPayload || buildEvaluationPayload();
+    setEvaluationGenerating(true);
     try {
       const createdEvaluation = await apiJson("/evaluations", {
         method: "POST",
@@ -770,12 +862,15 @@ if (el.evalRetryBtn) {
       setGenerationError(error.message);
       toggleEvalActionButtons(true);
       showToast(error.message, true);
+    } finally {
+      setEvaluationGenerating(false);
     }
   });
 }
 
 if (el.evalMaterialFallbackBtn) {
   el.evalMaterialFallbackBtn.addEventListener("click", async () => {
+    if (state.isGeneratingEvaluation) return;
     if (state.demoMode) {
       showToast("Modo demo: acción simulada.");
       return;
@@ -790,6 +885,7 @@ if (el.evalMaterialFallbackBtn) {
       showToast(msg, true);
       return;
     }
+    setEvaluationGenerating(true);
     try {
       await apiJson("/evaluations", {
         method: "POST",
@@ -811,6 +907,8 @@ if (el.evalMaterialFallbackBtn) {
       setGenerationError(error.message);
       toggleEvalActionButtons(true);
       showToast(error.message, true);
+    } finally {
+      setEvaluationGenerating(false);
     }
   });
 }
@@ -880,17 +978,7 @@ forms.textSubmission.addEventListener("submit", async (event) => {
       }),
     });
 
-    el.resultsBox.textContent = JSON.stringify(
-      {
-        entrega_id: submission.id,
-        texto_detectado: submission.raw_text || "",
-        puntaje: correction.score,
-        puntaje_maximo: correction.max_score,
-        devolucion: correction.feedback,
-      },
-      null,
-      2
-    );
+    renderCorrectionResult(submission, correction);
     forms.textSubmission.reset();
     showToast("Entrega corregida correctamente.");
   } catch (error) {
@@ -942,17 +1030,7 @@ forms.photoSubmission.addEventListener("submit", async (event) => {
       }),
     });
 
-    el.resultsBox.textContent = JSON.stringify(
-      {
-        entrega_id: submission.id,
-        texto_ocr: submission.raw_text || "",
-        puntaje: correction.score,
-        puntaje_maximo: correction.max_score,
-        devolucion: correction.feedback,
-      },
-      null,
-      2
-    );
+    renderCorrectionResult(submission, correction);
     forms.photoSubmission.reset();
     showToast("Foto procesada y corregida.");
   } catch (error) {

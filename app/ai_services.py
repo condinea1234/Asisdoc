@@ -1,7 +1,7 @@
 import json
 import os
 import re
-import time
+import textwrap
 import time
 from pathlib import Path
 from typing import Optional
@@ -79,10 +79,21 @@ def _mock_generate_questions(
             question = f"[{difficulty}] ({topic}) Pregunta {idx}: Verdadero o Falso."
             answer = "Verdadero"
         elif evaluation_type == "matching":
-            question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Relaciona cada concepto."
-            )
-            answer = None
+            question = textwrap.dedent(
+                f"""
+                [{difficulty}] ({topic}) Pregunta {idx}: Uní con flechas cada elemento de la columna A con su par correcto en la columna B.
+                Contexto: conceptos clave de {topic}.
+                Columna A:
+                1) Definición principal de {topic}
+                2) Ejemplo representativo de {topic}
+                3) Aplicación práctica de {topic}
+                Columna B:
+                A) Caso aplicado
+                B) Concepto base
+                C) Ejemplo típico
+                """
+            ).strip()
+            answer = "1-B;2-C;3-A"
         else:
             question = (
                 f"[{difficulty}] ({topic}) Pregunta {idx}: Responde segun lo estudiado."
@@ -105,13 +116,21 @@ def generate_questions(
     topic_value = (topic or "").strip() or "Tema general"
     material_value = (material_text or "").strip()
     material_label = material_value if material_value else "No provisto"
-    format_instruction = (
-        "Si el tipo es multiple_choice, cada question_text debe incluir 4 opciones "
-        "marcadas como A), B), C), D) en líneas separadas y expected_answer debe ser "
-        "la letra correcta (A, B, C o D)."
-        if evaluation_type == "multiple_choice"
-        else "Si no aplica, expected_answer puede ser null."
-    )
+    if evaluation_type == "multiple_choice":
+        format_instruction = (
+            "Cada question_text debe incluir 4 opciones marcadas como A), B), C), D) "
+            "en líneas separadas y expected_answer debe ser la letra correcta "
+            "(A, B, C o D)."
+        )
+    elif evaluation_type == "matching":
+        format_instruction = (
+            "Cada question_text debe incluir: una línea 'Contexto:', luego 'Columna A:' "
+            "con al menos 3 ítems numerados (1), 2), 3)) y 'Columna B:' con al menos "
+            "3 ítems con letras (A), B), C)). expected_answer debe indicar pares "
+            "como '1-B;2-C;3-A'."
+        )
+    else:
+        format_instruction = "Si no aplica, expected_answer puede ser null."
     source_instruction = (
         "Debes basarte exclusivamente en el material provisto."
         if restrict_to_material
@@ -169,6 +188,14 @@ def generate_questions(
                     )
                     if evaluation_type == "multiple_choice":
                         question_text, expected_answer = _normalize_multiple_choice(
+                            question_text=question_text,
+                            expected_answer=expected_answer,
+                            topic=topic_value,
+                            difficulty=difficulty,
+                            idx=len(result) + 1,
+                        )
+                    elif evaluation_type == "matching":
+                        question_text, expected_answer = _normalize_matching_question(
                             question_text=question_text,
                             expected_answer=expected_answer,
                             topic=topic_value,
@@ -249,11 +276,21 @@ def _material_fallback_generate_questions(
             )
             answer = "Verdadero"
         elif evaluation_type == "matching":
-            question = (
-                f"[{difficulty}] ({topic}) Pregunta {idx}: Relaciona conceptos usando este fragmento base: "
-                f"\"{fragment}\"."
-            )
-            answer = None
+            question = textwrap.dedent(
+                f"""
+                [{difficulty}] ({topic}) Pregunta {idx}: Uní con flechas usando el material de estudio.
+                Contexto: {fragment}
+                Columna A:
+                1) Idea principal del fragmento
+                2) Dato complementario del fragmento
+                3) Aplicación del fragmento
+                Columna B:
+                A) Desarrollo aplicado
+                B) Información central
+                C) Información de apoyo
+                """
+            ).strip()
+            answer = "1-B;2-C;3-A"
         else:
             question = (
                 f"[{difficulty}] ({topic}) Pregunta {idx}: "
@@ -295,21 +332,164 @@ def _normalize_multiple_choice(
     return normalized_question, normalized_answer
 
 
-def _mock_grade(raw_text: str, criteria: str, max_score: float) -> tuple[float, str]:
-    normalized = (raw_text or "").strip().lower()
-    keywords = [k.strip().lower() for k in criteria.split(",") if k.strip()]
-    if not keywords:
-        keywords = ["correcto"]
+def _normalize_matching_question(
+    question_text: str,
+    expected_answer: Optional[str],
+    topic: str,
+    difficulty: str,
+    idx: int,
+) -> QuestionItem:
+    normalized = (question_text or "").strip()
+    has_columns = "columna a" in normalized.lower() and "columna b" in normalized.lower()
+    if not has_columns:
+        normalized = textwrap.dedent(
+            f"""
+            [{difficulty}] ({topic}) Pregunta {idx}: Uní con flechas cada elemento correspondiente.
+            Contexto: clasificación y relaciones de {topic}.
+            Columna A:
+            1) Concepto principal de {topic}
+            2) Ejemplo de {topic}
+            3) Aplicación de {topic}
+            Columna B:
+            A) Aplicación
+            B) Concepto base
+            C) Ejemplo concreto
+            """
+        ).strip()
+    elif "contexto:" not in normalized.lower():
+        normalized = f"Contexto: relaciones de {topic}.\n{normalized}"
 
-    matches = sum(1 for kw in keywords if kw in normalized)
-    ratio = matches / len(keywords)
-    score = round(max_score * ratio, 2)
-    feedback = (
-        f"Criterios evaluados: {', '.join(keywords)}. "
-        f"Coincidencias detectadas: {matches}/{len(keywords)}. "
-        f"Puntaje asignado: {score}/{max_score}."
+    answer = (expected_answer or "").strip()
+    if not answer:
+        answer = "1-B;2-C;3-A"
+    return normalized, answer
+
+
+def _split_submission_answers(raw_text: str) -> list[str]:
+    normalized = (raw_text or "").strip()
+    if not normalized:
+        return []
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    answers: list[str] = []
+    numbered_pattern = re.compile(r"^\s*(\d+)[\)\.\:\-]\s*(.+)$")
+    for line in lines:
+        match = numbered_pattern.match(line)
+        if match:
+            answers.append(match.group(2).strip())
+            continue
+        answers.append(line)
+    return answers
+
+
+def _build_question_feedback(
+    answers: list[str],
+    criteria: str,
+    max_score: float,
+    question_count: int,
+) -> tuple[list[dict], float]:
+    keywords = [k.strip() for k in (criteria or "").split(",") if k.strip()]
+    total_questions = max(1, question_count, len(answers))
+    points_per_question = round(max_score / total_questions, 2)
+    items: list[dict] = []
+    total_score = 0.0
+
+    for idx in range(1, total_questions + 1):
+        answer = answers[idx - 1] if idx - 1 < len(answers) else ""
+        normalized_answer = (answer or "").strip()
+        lowered = normalized_answer.lower()
+        if not lowered:
+            items.append(
+                {
+                    "question": idx,
+                    "status": "x",
+                    "label": "X",
+                    "score": 0.0,
+                    "max_score": points_per_question,
+                    "comment": f"Respuesta {idx}: X. No responde.",
+                }
+            )
+            continue
+
+        if not keywords:
+            ratio = 0.7
+            missing: list[str] = []
+        else:
+            matched = sum(1 for kw in keywords if kw.lower() in lowered)
+            ratio = matched / len(keywords)
+            missing = [kw for kw in keywords if kw.lower() not in lowered][:2]
+
+        if ratio >= 0.75:
+            score = points_per_question
+            total_score += score
+            items.append(
+                {
+                    "question": idx,
+                    "status": "muy_bien",
+                    "label": "Muy bien",
+                    "score": round(score, 2),
+                    "max_score": points_per_question,
+                    "comment": f"Respuesta {idx}: Muy bien.",
+                }
+            )
+            continue
+
+        if ratio >= 0.35:
+            score = round(points_per_question * 0.6, 2)
+            total_score += score
+            if missing:
+                improvement = f" Mejorar: agregá {', '.join(missing)}."
+            else:
+                improvement = " Mejorar: completá con mayor precisión."
+            items.append(
+                {
+                    "question": idx,
+                    "status": "mejorar",
+                    "label": "Bien, mejorar",
+                    "score": score,
+                    "max_score": points_per_question,
+                    "comment": f"Respuesta {idx}: Bien, mejorar.{improvement}",
+                }
+            )
+            continue
+
+        items.append(
+            {
+                "question": idx,
+                "status": "x",
+                "label": "X",
+                "score": 0.0,
+                "max_score": points_per_question,
+                "comment": f"Respuesta {idx}: X. Incorrecta o fuera de criterio.",
+            }
+        )
+
+    return items, round(min(max_score, total_score), 2)
+
+
+def _build_teacher_feedback_text(items: list[dict], total_score: float, max_score: float) -> str:
+    lines = [
+        "Devolucion docente por pregunta:",
+        *(
+            f"- {item['comment']} ({item['score']}/{item['max_score']})"
+            for item in items
+        ),
+        f"Puntaje total: {round(total_score, 2)}/{max_score}",
+    ]
+    return "\n".join(lines)
+
+
+def _mock_grade(
+    raw_text: str, criteria: str, max_score: float, question_count: int = 1
+) -> tuple[float, str, list[dict]]:
+    answers = _split_submission_answers(raw_text)
+    items, total_score = _build_question_feedback(
+        answers=answers,
+        criteria=criteria,
+        max_score=max_score,
+        question_count=question_count,
     )
-    return score, feedback
+    feedback = _build_teacher_feedback_text(items, total_score, max_score)
+    return total_score, feedback, items
 
 
 def grade_submission_with_ai(
@@ -317,16 +497,22 @@ def grade_submission_with_ai(
     criteria: str,
     max_score: float,
     use_llm: bool = True,
-) -> tuple[float, str]:
+    evaluation_type: Optional[str] = None,
+    question_texts: Optional[list[str]] = None,
+) -> tuple[float, str, list[dict]]:
+    question_count = max(1, len(question_texts or []))
     if not use_llm:
-        return _mock_grade(raw_text, criteria, max_score)
+        return _mock_grade(raw_text, criteria, max_score, question_count=question_count)
     prompt = (
         "Corrige la respuesta de un alumno con criterios dados.\n"
+        f"Tipo de evaluación: {evaluation_type or 'general'}\n"
+        f"Cantidad de preguntas esperadas: {question_count}\n"
         f"Criterios: {criteria}\n"
         f"Respuesta del alumno: {raw_text}\n"
         f"Puntaje maximo: {max_score}\n"
-        "Devuelve SOLO JSON con {score, feedback}. "
-        "score debe estar entre 0 y puntaje maximo."
+        "Devuelve SOLO JSON con {score, feedback, question_feedback}. "
+        "question_feedback debe ser arreglo de {question,label,status,score,max_score,comment}. "
+        "Usa lenguaje docente humano: 'Muy bien', 'Bien, mejorar', 'X'."
     )
     for provider in _provider_order():
         try:
@@ -340,11 +526,43 @@ def grade_submission_with_ai(
             feedback = str(parsed.get("feedback", "")).strip()
             if not feedback:
                 feedback = "Correccion realizada por IA."
-            return round(score, 2), feedback
+            raw_items = parsed.get("question_feedback")
+            if not isinstance(raw_items, list):
+                answers = _split_submission_answers(raw_text)
+                auto_items, _ = _build_question_feedback(
+                    answers=answers,
+                    criteria=criteria,
+                    max_score=max_score,
+                    question_count=question_count,
+                )
+                return round(score, 2), feedback, auto_items
+            normalized_items: list[dict] = []
+            for idx, item in enumerate(raw_items[:question_count], start=1):
+                if not isinstance(item, dict):
+                    continue
+                normalized_items.append(
+                    {
+                        "question": int(item.get("question", idx)),
+                        "status": str(item.get("status", "mejorar")),
+                        "label": str(item.get("label", "Bien, mejorar")),
+                        "score": round(float(item.get("score", 0.0)), 2),
+                        "max_score": round(float(item.get("max_score", max_score / question_count)), 2),
+                        "comment": str(item.get("comment", f"Respuesta {idx}: Bien, mejorar.")),
+                    }
+                )
+            if not normalized_items:
+                answers = _split_submission_answers(raw_text)
+                normalized_items, _ = _build_question_feedback(
+                    answers=answers,
+                    criteria=criteria,
+                    max_score=max_score,
+                    question_count=question_count,
+                )
+            return round(score, 2), feedback, normalized_items
         except Exception:
             continue
 
-    return _mock_grade(raw_text, criteria, max_score)
+    return _mock_grade(raw_text, criteria, max_score, question_count=question_count)
 
 
 def extract_text_from_image(image_path: Path) -> str:

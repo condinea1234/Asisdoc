@@ -762,6 +762,54 @@ button.link-btn,
   padding: 0.45rem 0.62rem;
 }
 
+.loading-btn {
+  position: relative;
+  opacity: 0.85;
+}
+
+.loading-btn .btn-loader {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-left: 0.45rem;
+}
+
+.loading-btn.is-loading .btn-label {
+  opacity: 0.95;
+}
+
+.loading-btn.is-loading .btn-loader {
+  display: inline-block;
+}
+
+.loading-inline {
+  margin-top: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.loading-inline .loader {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #c7d2fe;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .generation-diagnostic {
   margin-top: 0.42rem;
   font-size: 0.82rem;

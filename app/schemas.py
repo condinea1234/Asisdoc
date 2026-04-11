@@ -179,6 +179,7 @@ class CorrectionRead(BaseModel):
     score: float
     max_score: float
     feedback: str
+    detailed_feedback: Optional[str] = None
     created_at: datetime
 
     class Config:

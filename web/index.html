@@ -233,6 +233,10 @@
                   </label>
                   <button type="submit">Generar evaluación</button>
                 </form>
+                <div id="eval-loading" class="loading-inline hidden" aria-live="polite">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Generando evaluación con IA...</span>
+                </div>
                 <p id="evaluation-generation-status" class="inline-message info hidden"></p>
                 <p id="evaluation-generation-hint" class="inline-message info hidden"></p>
                 <div id="evaluation-actions" class="generation-actions hidden">

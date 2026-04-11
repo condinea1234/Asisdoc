@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from contextlib import suppress
@@ -539,19 +540,31 @@ def correct_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Entrega no encontrada")
 
-    score, feedback = grade_submission_with_ai(
-        raw_text=submission.raw_text or "",
+    raw_text = (submission.raw_text or "").strip()
+    evaluation = db.get(Evaluation, submission.evaluation_id)
+    evaluation_questions = (
+        db.query(EvaluationQuestion)
+        .filter(EvaluationQuestion.evaluation_id == submission.evaluation_id)
+        .order_by(EvaluationQuestion.id.asc())
+        .all()
+    )
+    score, feedback, details = grade_submission_with_ai(
+        raw_text=raw_text,
         criteria=payload.criteria,
         max_score=payload.max_score,
         use_llm=payload.use_llm,
+        evaluation_type=evaluation.evaluation_type if evaluation else None,
+        question_texts=[q.question_text for q in evaluation_questions],
     )
+    details_json = json.dumps(details, ensure_ascii=False)
+    full_feedback = f"{feedback}\n\nDETALLE_PREGUNTAS_JSON={details_json}"
 
     correction = Correction(
         submission_id=submission.id,
         criteria=payload.criteria,
         score=score,
         max_score=payload.max_score,
-        feedback=feedback,
+        feedback=full_feedback,
     )
     db.add(correction)
 
@@ -563,7 +576,7 @@ def correct_submission(
     if student_eval:
         student_eval.score = score
         student_eval.max_score = payload.max_score
-        student_eval.feedback = feedback
+        student_eval.feedback = full_feedback
         student_eval.updated_at = datetime.utcnow()
     else:
         db.add(
@@ -572,12 +585,13 @@ def correct_submission(
                 evaluation_id=submission.evaluation_id,
                 score=score,
                 max_score=payload.max_score,
-                feedback=feedback,
+                feedback=full_feedback,
             )
         )
 
     db.commit()
     db.refresh(correction)
+    correction.detailed_feedback = feedback
     return correction
 
 
@@ -678,6 +692,158 @@ def _clean_export_stem(stem: str) -> str:
     return cleaned.strip() or stem.strip()
 
 
+def _parse_matching_question(
+    question_text: str,
+) -> tuple[str, list[tuple[str, str]], list[str], list[str]]:
+    lines = [line.strip() for line in question_text.splitlines() if line.strip()]
+    prompt_lines: list[str] = []
+    pairs: list[tuple[str, str]] = []
+    left_values: list[str] = []
+    right_values: list[str] = []
+    for line in lines:
+        if "|" in line:
+            left, right = [part.strip() for part in line.split("|", 1)]
+            if left and right:
+                pairs.append((left, right))
+                left_values.append(left)
+                right_values.append(right)
+            continue
+        prompt_lines.append(line)
+
+    prompt = " ".join(prompt_lines).strip()
+    prompt = _clean_export_stem(prompt) if prompt else "Relaciona cada elemento de la columna A con la columna B."
+    return prompt, pairs, left_values, right_values
+
+
+def _split_submission_answers(raw_text: str) -> list[str]:
+    normalized = (raw_text or "").strip()
+    if not normalized:
+        return []
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    answers: list[str] = []
+    numbered_pattern = re.compile(r"^\s*(\d+)[\)\.\:\-]\s*(.+)$")
+    for line in lines:
+        match = numbered_pattern.match(line)
+        if match:
+            answers.append(match.group(2).strip())
+            continue
+        answers.append(line)
+    return answers
+
+
+def _build_feedback_items(
+    answers: list[str], criteria: str, max_score: float
+) -> tuple[list[dict], float]:
+    keywords = [k.strip() for k in criteria.split(",") if k.strip()]
+    total_questions = max(1, len(answers))
+    points_per_question = round(max_score / total_questions, 2)
+    result: list[dict] = []
+    total_score = 0.0
+
+    for idx, answer in enumerate(answers, start=1):
+        normalized_answer = (answer or "").strip()
+        lowered = normalized_answer.lower()
+        if not lowered:
+            result.append(
+                {
+                    "question": idx,
+                    "status": "x",
+                    "label": "X",
+                    "score": 0.0,
+                    "max_score": points_per_question,
+                    "comment": "Sin respuesta. Marcada con X.",
+                }
+            )
+            continue
+
+        matched = sum(1 for kw in keywords if kw.lower() in lowered) if keywords else 0
+        ratio = (matched / len(keywords)) if keywords else 0.6
+        if ratio >= 0.75:
+            score = points_per_question
+            total_score += score
+            result.append(
+                {
+                    "question": idx,
+                    "status": "muy_bien",
+                    "label": "Muy bien",
+                    "score": round(score, 2),
+                    "max_score": points_per_question,
+                    "comment": f"Respuesta {idx}: Muy bien. Cumple con lo esperado.",
+                }
+            )
+            continue
+
+        if ratio >= 0.35:
+            score = round(points_per_question * 0.6, 2)
+            total_score += score
+            missing = [kw for kw in keywords if kw.lower() not in lowered][:2]
+            missing_hint = (
+                f" Podr?as agregar: {', '.join(missing)}."
+                if missing
+                else " Podr?as ampliar con m?s precisi?n conceptual."
+            )
+            result.append(
+                {
+                    "question": idx,
+                    "status": "mejorar",
+                    "label": "Bien, mejorar",
+                    "score": score,
+                    "max_score": points_per_question,
+                    "comment": (
+                        f"Respuesta {idx}: Bien, pero incompleta."
+                        f"{missing_hint}"
+                    ),
+                }
+            )
+            continue
+
+        result.append(
+            {
+                "question": idx,
+                "status": "x",
+                "label": "X",
+                "score": 0.0,
+                "max_score": points_per_question,
+                "comment": (
+                    f"Respuesta {idx}: Incorrecta o fuera de criterio."
+                    " Marcada con X."
+                ),
+            }
+        )
+
+    return result, round(min(max_score, total_score), 2)
+
+
+def _build_teacher_feedback_text(items: list[dict], total_score: float, max_score: float) -> str:
+    lines = [
+        "Devolucion docente por pregunta:",
+        *(f"- {item['comment']} ({item['score']}/{item['max_score']})" for item in items),
+        f"Puntaje total: {round(total_score, 2)}/{max_score}",
+    ]
+    return "\n".join(lines)
+
+
+def _extract_details_from_feedback(feedback_text: str) -> list[dict]:
+    marker = "\n\nDETALLE_PREGUNTAS_JSON="
+    if marker not in (feedback_text or ""):
+        return []
+    _, raw = feedback_text.split(marker, 1)
+    try:
+        parsed = json.loads(raw.strip())
+        if isinstance(parsed, list):
+            return parsed
+    except Exception:
+        return []
+    return []
+
+
+def _strip_feedback_details(feedback_text: str) -> str:
+    marker = "\n\nDETALLE_PREGUNTAS_JSON="
+    if marker not in (feedback_text or ""):
+        return (feedback_text or "").strip()
+    return (feedback_text.split(marker, 1)[0] or "").strip()
+
+
 @app.get("/evaluations/{evaluation_id}/export-docx")
 def export_evaluation_docx(
     evaluation_id: int,
@@ -752,6 +918,27 @@ def export_evaluation_docx(
             document.add_paragraph("")
             continue
 
+        if evaluation.evaluation_type == "matching":
+            prompt, pairs, left_values, right_values = _parse_matching_question(q.question_text)
+            question_paragraph = document.add_paragraph(f"{idx}. {prompt}")
+            question_paragraph.runs[0].bold = True
+            table = document.add_table(rows=max(2, len(left_values) + 1), cols=2)
+            table.style = "Table Grid"
+            table.cell(0, 0).text = "Columna A"
+            table.cell(0, 1).text = "Columna B"
+            for row_idx, value in enumerate(left_values, start=1):
+                table.cell(row_idx, 0).text = f"{row_idx}) {value}"
+            right_labels = [chr(65 + i) for i in range(len(right_values))]
+            for row_idx, value in enumerate(right_values, start=1):
+                label = right_labels[row_idx - 1] if row_idx - 1 < len(right_labels) else str(row_idx)
+                table.cell(row_idx, 1).text = f"{label}) {value}"
+            if pairs:
+                document.add_paragraph(
+                    "Indicacion: une con flechas los elementos de la Columna A con la Columna B."
+                )
+            document.add_paragraph("")
+            continue
+
         document.add_paragraph(f"{idx}. {_clean_export_stem(q.question_text)}")
         if evaluation.evaluation_type == "open_answer":
             document.add_paragraph("Respuesta: _________________________________________________")
@@ -763,6 +950,72 @@ def export_evaluation_docx(
     file_stream.seek(0)
 
     filename = f"evaluacion_{evaluation_id}.docx"
+    return StreamingResponse(
+        file_stream,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/corrections/{correction_id}/export-docx")
+def export_correction_docx(
+    correction_id: int,
+    school_header: str = "Institucion Educativa",
+    teacher_name: str = "Docente",
+    db: Session = Depends(get_db),
+    _: Teacher = Depends(get_current_teacher),
+):
+    correction = db.get(Correction, correction_id)
+    if not correction:
+        raise HTTPException(status_code=404, detail="Correccion no encontrada")
+    submission = db.get(Submission, correction.submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Entrega no encontrada")
+    student = db.get(Student, submission.student_id)
+    evaluation = db.get(Evaluation, submission.evaluation_id)
+    if not student or not evaluation:
+        raise HTTPException(status_code=404, detail="Datos relacionados incompletos")
+
+    feedback_items = _extract_details_from_feedback(correction.feedback)
+    if not feedback_items:
+        answers = _split_submission_answers(submission.raw_text or "")
+        feedback_items, _ = _build_feedback_items(
+            answers=answers,
+            criteria=correction.criteria,
+            max_score=correction.max_score,
+            question_count=max(1, len(answers)),
+        )
+
+    document = Document()
+    heading = document.add_heading(school_header, level=1)
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    document.add_paragraph(f"Informe de correccion: {evaluation.title}")
+    document.add_paragraph(f"Docente: {teacher_name}")
+    document.add_paragraph(f"Alumno: {student.full_name}")
+    document.add_paragraph(f"Puntaje final: {correction.score}/{correction.max_score}")
+    document.add_paragraph("")
+    document.add_paragraph("Detalle por pregunta:")
+
+    for item in feedback_items:
+        p = document.add_paragraph(
+            f"Pregunta {item['question']}: {item['label']} - {item['score']}/{item['max_score']}"
+        )
+        p.runs[0].bold = True
+        document.add_paragraph(item["comment"])
+
+    document.add_paragraph("")
+    document.add_paragraph("Resumen docente:")
+    document.add_paragraph(_strip_feedback_details(correction.feedback))
+    document.add_paragraph("")
+    document.add_paragraph("Criterios utilizados:")
+    document.add_paragraph(correction.criteria)
+
+    file_stream = BytesIO()
+    document.save(file_stream)
+    file_stream.seek(0)
+    filename = f"correccion_{correction_id}.docx"
     return StreamingResponse(
         file_stream,
         media_type=(
