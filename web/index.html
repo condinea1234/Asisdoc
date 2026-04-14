@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Evalia - Panel Docente</title>
+    <link rel="stylesheet" href="/web/styles.css?v=20260411b" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+            <img class="brand-logo" src="/web/logo-evalia.svg" alt="Logo Evalia" />
+          <div>
+            <h1>Evalia</h1>
+            <p>Plataforma docente con IA para crear, corregir y acompañar evaluaciones.</p>
+          </div>
+        </div>
+        <div class="topbar-controls">
+          <span class="brand-badge">Modo profesional</span>
+          <label class="theme-selector">
+            Tema visual
+            <select id="theme-select" aria-label="Seleccionar tema visual">
+              <option value="claro">Claro</option>
+              <option value="oscuro">Oscuro</option>
+              <option value="alto-contraste">Alto contraste</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </header>
+    <div id="demo-banner" class="demo-banner hidden">
+      Estás en modo demo visual. Los datos son de ejemplo y no se guardan.
+    </div>
+
+    <main class="container">
+      <section id="auth-shell" class="auth-shell">
+        <aside class="auth-hero card">
+          <div class="auth-hero-logo">
+            <img class="brand-logo large" src="/web/logo-evalia.svg" alt="Logo Evalia" />
+            <div>
+              <h2>Bienvenido a Evalia</h2>
+              <p>Diseñado para docentes: sobrio, claro y enfocado en tareas reales del aula.</p>
+            </div>
+          </div>
+          <ul class="benefits-list">
+            <li>Creación de evaluaciones con baja carga cognitiva</li>
+            <li>Corrección asistida con IA y criterios del docente</li>
+            <li>Navegación simple con acceso rápido a cursos y alumnos</li>
+            <li>Interfaz accesible con foco en legibilidad y orden</li>
+          </ul>
+        </aside>
+
+        <section id="auth-card" class="card auth-card">
+          <h2>Ingreso docente</h2>
+          <p class="section-help">Accedé con tu cuenta para administrar todo tu ciclo de evaluación.</p>
+          <p id="auth-status" class="auth-status hidden"></p>
+          <div class="grid two auth-grid">
+            <div class="auth-pane">
+              <h3>Registrarse</h3>
+              <form id="register-form">
+                <label>Nombre completo</label>
+                <input required id="reg-name" placeholder="Ej: María Gómez" />
+                <label>Correo</label>
+                <input required id="reg-email" type="email" />
+                <label>Contraseña</label>
+                <input required id="reg-password" type="password" minlength="8" />
+                <button type="submit">Crear cuenta</button>
+              </form>
+            </div>
+            <div class="auth-pane">
+              <h3>Iniciar sesión</h3>
+              <form id="login-form">
+                <label>Correo</label>
+                <input required id="login-email" type="email" />
+                <label>Contraseña</label>
+                <input required id="login-password" type="password" />
+                <button type="submit">Entrar</button>
+              </form>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section id="panel-card" class="card hidden">
+        <div class="workspace-shell">
+          <aside class="workspace-nav">
+            <h3 class="nav-title">Atajos</h3>
+            <ul class="nav-list">
+              <li><button type="button" class="nav-btn" data-nav-target="dashboard-section">📊 Dashboard</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="course-section">🏫 Cursos</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="student-section">👥 Alumnos</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="evaluation-section">🧠 Evaluaciones</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="schedule-section">🗓️ Agenda</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="correction-section">✅ Correcciones</button></li>
+              <li><button type="button" class="nav-btn" data-nav-target="results-section">🧾 Resultados</button></li>
+            </ul>
+          </aside>
+
+          <div class="workspace-main">
+            <div class="panel-header">
+              <div>
+                <h2>Panel docente</h2>
+                <p class="section-help">Gestioná tu trabajo diario con una experiencia clara y ordenada.</p>
+              </div>
+              <div class="panel-top-actions">
+                <span id="teacher-label" class="teacher-chip"></span>
+                <button id="logout-btn" class="secondary">Cerrar sesión</button>
+              </div>
+            </div>
+
+            <section id="dashboard-section" class="dashboard-metrics">
+              <article class="metric-card">
+                <span class="metric-label">Cursos</span>
+                <strong id="metric-courses" class="metric-value">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">Alumnos</span>
+                <strong id="metric-students" class="metric-value">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">Evaluaciones</span>
+                <strong id="metric-evaluations" class="metric-value">0</strong>
+              </article>
+              <article class="metric-card">
+                <span class="metric-label">Exámenes agendados</span>
+                <strong id="metric-schedules" class="metric-value">0</strong>
+              </article>
+            </section>
+
+            <div class="quick-actions">
+              <button type="button" class="secondary" data-open-modal="courses-modal">
+                Ver cursos
+              </button>
+              <button type="button" class="secondary" data-open-modal="students-modal">
+                Ver alumnos
+              </button>
+              <button type="button" class="secondary" data-open-modal="subjects-modal">
+                Ver materias
+              </button>
+            </div>
+
+            <div class="grid two">
+              <div class="subcard" id="course-section">
+                <h3>Curso</h3>
+                <p class="section-help">Creá el curso y asociá la materia principal.</p>
+                <form id="course-form">
+                  <label>Nombre del curso</label>
+                  <input required id="course-name" placeholder="Ej: 3°A" />
+                  <label>Materia / descripción</label>
+                  <input id="course-description" placeholder="Ej: Ciencias Naturales" />
+                  <button type="submit">Crear curso</button>
+                </form>
+                <p class="inline-message info">
+                  El listado completo de cursos se visualiza desde el botón "Ver cursos".
+                </p>
+              </div>
+
+              <div class="subcard" id="student-section">
+                <h3>Alumno</h3>
+                <p class="section-help">Registrá estudiantes y vinculalos al curso correspondiente.</p>
+                <form id="student-form">
+                  <label>Nombre del alumno</label>
+                  <input required id="student-name" />
+                  <label>Curso</label>
+                  <select id="student-course" required></select>
+                  <button type="submit">Registrar alumno</button>
+                </form>
+                <p class="inline-message info">
+                  El listado completo de alumnos se visualiza desde el botón "Ver alumnos".
+                </p>
+              </div>
+            </div>
+
+            <div class="grid two">
+              <div class="subcard" id="evaluation-section">
+                <h3>Crear evaluación</h3>
+                <p class="section-help">
+                  Definí tipo, dificultad y tema de evaluación. Luego generá preguntas con IA.
+                </p>
+                <form id="evaluation-form">
+                  <label>Título</label>
+                  <input required id="eval-title" />
+                  <label>Tema a evaluar (opcional)</label>
+                  <input
+                    id="eval-topic"
+                    placeholder="Ej: Fracciones, Revolución Francesa, Células"
+                  />
+                  <p class="field-hint">
+                    Si no lo completás, se usará automáticamente el título como tema.
+                  </p>
+                  <label>Curso</label>
+                  <select id="eval-course" required></select>
+                  <label>Tipo</label>
+                  <select id="eval-type">
+                    <option value="multiple_choice">Opción múltiple</option>
+                    <option value="true_false">Verdadero/Falso</option>
+                    <option value="matching">Unir con líneas</option>
+                    <option value="open_answer">Respuesta abierta</option>
+                  </select>
+                  <label>Dificultad</label>
+                  <select id="eval-difficulty">
+                    <option value="easy">Fácil</option>
+                    <option value="medium" selected>Media</option>
+                    <option value="hard">Difícil</option>
+                  </select>
+                  <label>Cantidad de preguntas</label>
+                  <input id="eval-count" type="number" min="1" max="30" value="10" />
+                  <label>Material base (opcional)</label>
+                  <textarea id="eval-material" rows="3"></textarea>
+                  <div class="material-box">
+                    <label>Subir material (PDF, Word o imagen)</label>
+                    <input
+                      id="material-file"
+                      type="file"
+                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.webp,.bmp,.tiff"
+                    />
+                    <button type="button" id="material-upload-btn" class="secondary">
+                      Cargar material
+                    </button>
+                    <label>Material cargado para esta evaluación</label>
+                    <select id="eval-material-select">
+                      <option value="">Sin material seleccionado</option>
+                    </select>
+                    <label class="inline-check">
+                      <input id="eval-only-material" type="checkbox" />
+                      Basar preguntas exclusivamente en material cargado
+                    </label>
+                  </div>
+                  <label class="inline-check">
+                    <input id="eval-use-knowledge" type="checkbox" checked />
+                    Permitir conocimiento general de IA
+                  </label>
+                  <button type="submit">Generar evaluación</button>
+                </form>
+                <div id="eval-loading" class="loading-inline hidden" aria-live="polite">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Generando evaluación con IA...</span>
+                </div>
+                <p id="evaluation-generation-status" class="inline-message info hidden"></p>
+                <p id="evaluation-generation-hint" class="inline-message info hidden"></p>
+                <div id="evaluation-actions" class="generation-actions hidden">
+                  <button id="eval-retry-btn" type="button" class="secondary">
+                    Reintentar con IA
+                  </button>
+                  <button id="eval-material-fallback-btn" type="button" class="secondary">
+                    Usar material como respaldo
+                  </button>
+                </div>
+                <ul id="evaluations-list" class="list"></ul>
+              </div>
+
+              <div class="subcard" id="schedule-section">
+                <h3>Agenda de examen</h3>
+                <p class="section-help">Programá fechas y mantené visible tu calendario evaluativo.</p>
+                <form id="schedule-form">
+                  <label>Evaluación</label>
+                  <select id="schedule-evaluation" required></select>
+                  <label>Fecha y hora</label>
+                  <input id="schedule-date" type="datetime-local" required />
+                  <label>Notas</label>
+                  <input id="schedule-notes" />
+                  <button type="submit">Programar</button>
+                </form>
+                <ul id="schedules-list" class="list"></ul>
+              </div>
+            </div>
+
+            <div class="grid two" id="correction-section">
+              <div class="subcard">
+                <h3>Corrección por texto</h3>
+                <p class="section-help">Ideal para respuestas copiadas por el docente o por el alumno.</p>
+                <form id="submission-text-form">
+                  <label>Evaluación</label>
+                  <select id="submission-evaluation" required></select>
+                  <label>Alumno</label>
+                  <select id="submission-student" required></select>
+                  <label>Respuesta del alumno</label>
+                  <textarea id="submission-raw-text" rows="4"></textarea>
+                  <label>Criterios (coma separada)</label>
+                  <input id="submission-criteria" placeholder="células, tejidos, órganos" />
+                  <label>Puntaje máximo</label>
+                  <input id="submission-max-score" type="number" min="1" value="10" />
+                  <label class="inline-check">
+                    <input id="submission-use-llm" type="checkbox" checked />
+                    Usar IA avanzada (si está configurada)
+                  </label>
+                  <button type="submit">Enviar y corregir</button>
+                </form>
+              </div>
+
+              <div class="subcard">
+                <h3>Corrección por foto (OCR)</h3>
+                <p class="section-help">Subí una imagen del examen y obtené corrección asistida.</p>
+                <form id="submission-photo-form">
+                  <label>Evaluación</label>
+                  <select id="photo-evaluation" required></select>
+                  <label>Alumno</label>
+                  <select id="photo-student" required></select>
+                  <label>Imagen del examen</label>
+                  <input id="photo-file" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,.tiff" required />
+                  <label>Criterios (coma separada)</label>
+                  <input id="photo-criteria" placeholder="células, tejidos, órganos" />
+                  <label>Puntaje máximo</label>
+                  <input id="photo-max-score" type="number" min="1" value="10" />
+                  <button type="submit">Subir foto y corregir</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="subcard" id="results-section">
+              <h3>Resultados de corrección</h3>
+              <div id="results-summary" class="results-summary hidden"></div>
+              <div id="results-table-wrap" class="results-table-wrap hidden"></div>
+              <pre id="results-box" class="results-console">Sin resultados aún.</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="courses-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Cursos</h3>
+          <button type="button" class="modal-close" data-close-modal="courses-modal">✕</button>
+        </div>
+        <ul id="courses-modal-list" class="list"></ul>
+        <p class="modal-empty hidden" id="courses-modal-empty">No hay cursos cargados.</p>
+      </div>
+    </div>
+
+    <div id="students-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Alumnos</h3>
+          <button type="button" class="modal-close" data-close-modal="students-modal">✕</button>
+        </div>
+        <ul id="students-modal-list" class="list"></ul>
+        <p class="modal-empty hidden" id="students-modal-empty">No hay alumnos cargados.</p>
+      </div>
+    </div>
+
+    <div id="subjects-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Materias</h3>
+          <button type="button" class="modal-close" data-close-modal="subjects-modal">✕</button>
+        </div>
+        <ul id="subjects-modal-list" class="list"></ul>
+        <p class="modal-empty hidden" id="subjects-modal-empty">No hay materias registradas aún.</p>
+      </div>
+    </div>
+
+    <section id="toast" class="toast hidden"></section>
+    <script src="/web/app.js?v=20260411b"></script>
+  </body>
+</html>

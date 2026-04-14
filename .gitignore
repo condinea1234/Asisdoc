@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.sqlite3
+local.db
+uploads/
+.preview_logs/
+.firebase/
+google-cloud-sdk/
