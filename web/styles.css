@@ -719,6 +719,62 @@ button.link-btn,
   min-height: 120px;
 }
 
+.result-summary {
+  margin-top: 0.65rem;
+  padding: 0.72rem;
+  border-radius: 10px;
+  border: 1px solid #d3def2;
+  background: #f8fbff;
+}
+
+.result-summary p {
+  margin: 0.24rem 0;
+  color: #1e293b;
+}
+
+.result-detail-table {
+  margin-top: 0.65rem;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.result-detail-table th,
+.result-detail-table td {
+  border: 1px solid #d3def2;
+  padding: 0.45rem 0.52rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.result-detail-table th {
+  background: #eef5ff;
+  color: #1e3a8a;
+}
+
+.chip-status {
+  display: inline-block;
+  padding: 0.14rem 0.48rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.chip-status.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.chip-status.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.chip-status.bad {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .hidden {
   display: none !important;
 }

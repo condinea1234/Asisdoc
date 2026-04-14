@@ -37,10 +37,12 @@ const el = {
   evaluationStatusHint: document.getElementById("evaluation-generation-hint"),
   evaluationActions: document.getElementById("evaluation-actions"),
   evalLoading: document.getElementById("eval-loading"),
-  evalRetryBtn: document.getElementById("retry-ai-btn"),
-  evalMaterialFallbackBtn: document.getElementById("use-material-fallback-btn"),
+  evalRetryBtn: document.getElementById("eval-retry-btn"),
+  evalMaterialFallbackBtn: document.getElementById("eval-material-fallback-btn"),
   schedulesList: document.getElementById("schedules-list"),
   resultsBox: document.getElementById("results-box"),
+  correctionSummary: document.getElementById("correction-summary"),
+  correctionTable: document.getElementById("correction-table"),
   coursesModal: document.getElementById("courses-modal"),
   studentsModal: document.getElementById("students-modal"),
   subjectsModal: document.getElementById("subjects-modal"),
@@ -642,6 +644,41 @@ function renderCorrectionResult(submission, correction) {
     exportar_informe: `Usá el botón "Descargar informe de corrección"`,
   };
   el.resultsBox.textContent = JSON.stringify(payload, null, 2);
+  if (el.correctionSummary) {
+    el.correctionSummary.classList.remove("hidden");
+    el.correctionSummary.textContent = payload.devolucion_docente || "Sin devolución disponible.";
+  }
+  if (el.correctionTable) {
+    if (Array.isArray(detailItems) && detailItems.length) {
+      const rows = detailItems
+        .map(
+          (item) => `
+            <tr>
+              <td>${item.question ?? "-"}</td>
+              <td>${item.label ?? "-"}</td>
+              <td>${item.score ?? 0}/${item.max_score ?? 0}</td>
+              <td>${item.comment ?? ""}</td>
+            </tr>
+          `
+        )
+        .join("");
+      el.correctionTable.innerHTML = `
+        <thead>
+          <tr>
+            <th>Pregunta</th>
+            <th>Estado</th>
+            <th>Puntaje</th>
+            <th>Observación docente</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      `;
+      el.correctionTable.classList.remove("hidden");
+    } else {
+      el.correctionTable.classList.add("hidden");
+      el.correctionTable.innerHTML = "";
+    }
+  }
 
   if (!document.getElementById("download-correction-btn")) {
     const button = document.createElement("button");
